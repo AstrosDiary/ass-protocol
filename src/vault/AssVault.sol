@@ -140,6 +140,9 @@ contract AssVault is Initializable, AccessControlUpgradeable, VaultBaseV2 {
         uint256 whole = wei_ / 1e18;
         uint256 frac = (wei_ % 1e18) / 1e14;
         bytes memory f = new bytes(4);
+        // uint8 cast is safe: frac % 10 is in [0,9], so 48 + it is in [48,57]
+        // (ASCII '0'-'9') — always < 256. Standard digit-to-ASCII idiom.
+        // forge-lint: disable-next-line(unsafe-typecast)
         for (uint256 i = 4; i > 0; --i) { f[i - 1] = bytes1(uint8(48 + frac % 10)); frac /= 10; }
         return string.concat(_u(whole), ".", string(f), " BNB");
     }
@@ -149,6 +152,9 @@ contract AssVault is Initializable, AccessControlUpgradeable, VaultBaseV2 {
         uint256 t = v; uint256 d;
         while (t != 0) { d++; t /= 10; }
         bytes memory b = new bytes(d);
+        // uint8 cast is safe: v % 10 is in [0,9], so 48 + it is in [48,57]
+        // (ASCII '0'-'9') — always < 256. Standard digit-to-ASCII idiom.
+        // forge-lint: disable-next-line(unsafe-typecast)
         while (v != 0) { b[--d] = bytes1(uint8(48 + v % 10)); v /= 10; }
         return string(b);
     }
