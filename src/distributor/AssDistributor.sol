@@ -161,6 +161,11 @@ contract AssDistributor is Ownable, ReentrancyGuard {
             (uint256 share,,) = dividendTracker.userInfo(h);
             if (share == 0) continue; // excluded / below Flap minimum — tracker's call
             if (share > type(uint96).max) revert ShareOverflow();
+            // uint96 max (~7.9e28) exceeds max possible share ($ASS total
+            // supply = 1e27 raw), and the ShareOverflow guard above makes
+            // truncation unreachable. (address,uint96) slot-packing per
+            // Compound/Uniswap governance token precedent.
+            // forge-lint: disable-next-line(unsafe-typecast)
             entries.push(Entry(h, uint96(share)));
             unchecked { added++; sharesAdded += share; }
         }
