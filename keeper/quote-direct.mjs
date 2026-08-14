@@ -92,14 +92,17 @@ console.log(`\n# executeBuy params ready (deadline ${deadline}, ~5 min)`)
 
 if (process.argv.includes('--execute')) {
   const { execFileSync } = await import('node:child_process')
-  console.error(`[${sym}] EXECUTING via cast (keystore password prompt follows)...`)
+  const { existsSync } = await import('node:fs')                              // ADDITION 1
+  const pwArgs = existsSync(process.env.HOME + '/.ass_pw')                    // ADDITION 2
+    ? ['--password-file', process.env.HOME + '/.ass_pw'] : []
+  console.error(`[${sym}] EXECUTING via cast (prompts only if no pw file)...`)
   const out2 = execFileSync('cast', [
     'send', ENGINE,
     'executeBuy(address,address,bytes,uint256,uint256,uint256)',
     TOKEN, process.env.SMART_ROUTER, calldata,
     spend.toString(), minOut.toString(), deadline.toString(),
     '--gas-limit', '1500000',
-    '--rpc-url', RPC, '--account', 'ass-deployer',
+    '--rpc-url', RPC, '--account', 'ass-deployer', ...pwArgs,                 // ADDITION 3
   ], { stdio: ['inherit', 'pipe', 'inherit'] }).toString()
   console.log(out2)
   const m = out2.match(/status\s+1|status\s+"?success/i)
