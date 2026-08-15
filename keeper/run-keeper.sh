@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -u
+trap 'rm -f /tmp/ass-keeper.lock' EXIT
 cd "$(dirname "$0")/.."
 set -a; source .env; set +a        # env file = single source of truth, sourced on EVERY launch
 cd keeper

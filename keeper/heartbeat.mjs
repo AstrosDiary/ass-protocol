@@ -10,6 +10,7 @@ const RPC = env('BSC_RPC_URL'), VAULT = env('VAULT'), ENGINE = env('ENGINE'), DI
 const TAXPROC = process.env.TAXPROC ?? '0x34a643c09d086DA1382d8C39b2Aea0EA0EcA9D6F'
 const RELEASE_MIN = BigInt(process.env.RELEASE_MIN ?? '5000000000000000')  // 0.005 BNB
 const BUY_MIN = BigInt(process.env.BUY_MIN ?? '2000000000000000')          // 0.002 WBNB
+const POT_MIN = BigInt(process.env.POT_MIN ?? '1000000000000')             // 1e12 raw — ignore rounding dust
 const STOCKS = { BABAB: '0x4eF9d3062c7F6ebA4AAE4990c5036598C6eff4ec',
                  TSMB:  '0xAB78b89B5bb00236Be0B4B20704cBfa04EfC711c',
                  SKHYB: '0xCA750eF65f295BBECd685Abf54e82CAf297BDB61' }
@@ -59,7 +60,7 @@ let potWaiting = false
 for (const addr of Object.values(STOCKS)) {
   const bal = await client.readContract({ address: addr, abi, functionName: 'balanceOf', args: [DIST] })
   const res = await client.readContract({ address: DIST, abi, functionName: 'reservedForAccrued', args: [addr] })
-  if (bal > res) { potWaiting = true; break }
+  if (bal > res + POT_MIN) { potWaiting = true; break }
 }
 const phase = await client.readContract({ address: DIST, abi, functionName: 'phase' })
 if (potWaiting && phase === 0) step('cycle', () => {
