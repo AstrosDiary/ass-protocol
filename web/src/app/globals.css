@@ -1,26 +1,39 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@theme {
+  /* --- $ASS design tokens (UI/UX spec v1.1) --- */
+  --color-ass-black: #05060D;
+  --color-midnight: #0B0D18;
+  --color-deep-navy: #111426;
+  --color-deep-purple: #7137D6;
+  --color-ass-purple: #9747FF;   /* 4.49:1 on ass-black — never small text */
+  --color-lavender: #B56CFF;
+  --color-violet: #C99BFF;
+  --color-cream: #FFF1D8;
+  --color-warm-white: #F5F1E8;
+  --color-muted-grey: #A9A2B8;
+  --color-gain: #6CFF8D;         /* positive market data only */
+  --color-loss: #FF5A6A;         /* negative market data only */
+  --color-term-bg: #070A0D;
+  --color-term-text: #8CFFA0;
+  --color-term-dim: #518A5A;
+  --color-term-border: #29382D;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* font stacks wired to the next/font variables from layout.tsx */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono), ui-monospace, monospace;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* spec: almost-black application first, purple atmosphere second */
+  background:
+    radial-gradient(circle at 70% 20%, rgba(151, 71, 255, 0.10), transparent 38%),
+    linear-gradient(180deg, #0B0D18 0%, #05060D 65%, #03040A 100%);
+  background-attachment: fixed;
+  color: var(--color-warm-white);
+  font-family: var(--font-sans);
 }
+
+/* protocol numbers: IBM Plex Mono, tabular — apply via .font-mono + this */
+.tabular { font-variant-numeric: tabular-nums; }
