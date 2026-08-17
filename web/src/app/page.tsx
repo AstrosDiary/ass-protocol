@@ -1,69 +1,148 @@
+"use client";
 import Image from "next/image";
+import Link from "next/link";
+import { STOCKS, ADDR, fmtUnits, formatBStockAmount } from "@/lib/ass";
+import { useProtocolStats, useAssetCards, useMarkets, usd, pct } from "@/lib/hooks";
+import { WhyAss } from "@/components/WhyAss";
+
+const GALLERY = [
+  { src: "/brand/gallery-1.png", caption: "Markets sleep. Strategy doesn't." },
+  { src: "/brand/my-desk.png", caption: "Discipline. Patience. Conviction." },
+  { src: "/brand/asia-desk.png", caption: "Long-term edge. Asian exposure." },
+];
 
 export default function Home() {
+  const { data: stats } = useProtocolStats();
+  const { data: cards } = useAssetCards();
+  const { data: markets } = useMarkets();
+
+  // BSTOCKS ACCRUED (USD): Σ cumulativeDistributedRaw × live price — real math or dash
+  const accruedUsd = (() => {
+    if (!cards || !markets) return null;
+    let sum = 0;
+    for (const s of STOCKS) {
+      const card = cards.find((c) => c.asset.toLowerCase() === s.address.toLowerCase());
+      const p = markets.stocks[s.symbol]?.priceUsd;
+      if (!card || p == null) return null;
+      sum += Number(formatBStockAmount(card.cumulativeDistributedRaw).replace(/,/g, "")) * p;
+    }
+    return sum;
+  })();
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
+    <>
+      {/* ============ HERO ============ */}
+      <section className="relative aspect-video min-h-[560px] overflow-hidden">
+        <div className="absolute inset-0">
+          <Image src="/brand/hero.png" alt="" fill priority
+            className="object-cover object-[5%_10%]" />
+          <div className="absolute inset-0 bg-gradient-to-r from-ass-black via-ass-black/30 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-ass-black via-transparent to-ass-black/30" />
+        </div>
+        <div className="relative mx-auto flex h-full max-w-7xl flex-col justify-center px-4">
+          <h1 className="font-display text-5xl font-bold tracking-tight text-cream [-webkit-text-stroke:2.5px_#FFF1D8] md:text-7xl">
+            <span className="font-display text-5xl font-bold tracking-tight md:text-8xl">A</span>SIAN <span className="font-display text-5xl font-bold tracking-tight md:text-8xl">S</span>TOCK <span className="font-display text-5xl font-bold tracking-tight md:text-8xl">S</span>TRATEGY
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="mt-2 font-display text-5xl font-bold text-ass-purple [-webkit-text-stroke:3px_#9747FF] md:text-7xl">$ASS</p>
+          <p className="mt-6 font-display text-sm tracking-[0.2em] text-lavender">
+            THE ASIAN bSTOCK PROTOCOL.
           </p>
+          <p className="mt-3 max-w-md text-warm-white/85">
+            Hold <strong>$ASS</strong> and automatically accrue Asian <strong>bStocks</strong> in your wallet.
+            Passive Exposure. Real Asian Markets. Real ASS.
+          </p>
+          <div className="mt-8 flex gap-3">
+            <a href={`https://flap.sh/bnb/${ADDR.token}`} target="_blank" rel="noreferrer"
+              className="rounded-lg bg-deep-purple px-6 py-3 font-display font-bold text-cream transition-colors hover:bg-ass-purple">
+              BUY $ASS
+            </a>
+            <Link href="/market-desk"
+              className="rounded-lg border border-warm-white/15 bg-deep-navy/80 px-6 py-3 font-display font-bold text-warm-white transition-colors hover:border-lavender/50">
+              VIEW MARKET DESK
+            </Link>
+          </div>
+
+          {/* compact protocol card — real sources only */}
+          <div className="mt-12 grid max-w-2xl grid-cols-2 gap-px overflow-hidden rounded-xl border border-warm-white/10 bg-warm-white/10 md:grid-cols-4">
+            {[
+              { label: "$ASS PRICE", value: usd(markets?.ass.priceUsd ?? null, 6) },
+              { label: "24H VOLUME", value: usd(markets?.ass.volume24h ?? null, 0) },
+              { label: "bSTOCKS ACQUIRED", value: accruedUsd == null ? "—" : usd(accruedUsd) },
+              { label: "BNB PROCESSED", value: stats ? fmtUnits(stats.cumulativeBnbProcessed) : "—" },
+            ].map((s) => (
+              <div key={s.label} className="bg-midnight px-4 py-3">
+                <div className="text-[11px] tracking-widest text-muted-grey">{s.label}</div>
+                <div className="mt-1 font-mono text-lg text-warm-white tabular">{s.value}</div>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </section>
+
+      {/* ============ WHY $ASS ============ */}
+      <WhyAss />
+
+      {/* ============ HOW IT WORKS ============ */}
+      <section className="mx-auto max-w-7xl px-4 ">
+        <h2 className="font-display text-xs tracking-[0.25em] text-muted-grey">| HOW IT WORKS</h2>
+        <div className="mt-4 grid gap-4 md:grid-cols-3">
+          {[
+            ["1", "BUY $ASS", "Trade $ASS on the open market. Every trade drives the strategy."],
+            ["2", "PROTOCOL BUYS ASIA", "Trading tax automatically converts into the Asian bStocks basket."],
+            ["3", "ACCRUE AUTOMATICALLY", "Asian bStocks are automatically accrued in your wallet. No actions."],
+          ].map(([n, t, d]) => (
+            <div key={n} className="rounded-xl border border-warm-white/10 bg-midnight p-6">
+              <span className="font-display text-4xl font-bold text-ass-purple">{n}</span>
+              <h3 className="mt-3 font-display text-cream">{t}</h3>
+              <p className="mt-2 text-sm text-muted-grey">{d}</p>
+            </div>
+          ))}
         </div>
-      </main>
-    </div>
+      </section>
+
+      {/* ============ BASKET ============ */}
+      <section className="mx-auto max-w-7xl px-4 pb-16">
+        <h2 className="font-display text-xs tracking-[0.25em] text-muted-grey">| ASIA bSTOCKS BASKET</h2>
+        <div className="mt-4 grid gap-4 md:grid-cols-3">
+          {STOCKS.map((s) => {
+            const m = markets?.stocks[s.symbol];
+            return (
+              <div key={s.symbol} className="rounded-md border border-term-border bg-term-bg p-5">
+                <div className="flex items-baseline justify-between">
+                  <h3 className="font-mono text-lg text-warm-white">{s.symbol}</h3>
+                  <span className="text-[11px] tracking-widest text-term-dim">{s.region.toUpperCase()}</span>
+                </div>
+                <p className="text-sm text-muted-grey">{s.name}</p>
+                <div className="mt-4 flex items-baseline gap-2 font-mono tabular">
+                  <span className="text-xl text-warm-white">{usd(m?.priceUsd ?? null)}</span>
+                  {m?.change24h != null && (
+                    <span className={m.change24h >= 0 ? "text-gain" : "text-loss"}>{pct(m.change24h)} <span className="text-[11px] text-sm">(24h)</span></span>
+                  )}
+                </div>
+                <p className="mt-3 flex items-center gap-1.5 text-[11px] text-term-dim">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-ass-purple" />
+                  TOKENIZED ON BNB CHAIN
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ============ STRATEGY DESK GALLERY ============ */}
+      <section className="mx-auto max-w-7xl px-4 pb-8 py-12">
+        <h2 className="font-display text-xs tracking-[0.25em] text-muted-grey">| <strong>$ASS</strong> GALLERY</h2>
+        <div className="mt-4 flex snap-x gap-4 overflow-x-auto pb-2">
+          {GALLERY.map((g) => (
+            <figure key={g.src} className="w-64 shrink-0 snap-start overflow-hidden rounded-xl border border-warm-white/10 bg-midnight">
+              <div className="relative h-72 w-full">
+                <Image src={g.src} alt={g.caption} fill className="object-cover" />
+              </div>
+              <figcaption className="px-4 py-3 text-sm text-warm-white/85">{g.caption}</figcaption>
+            </figure>
+          ))}
+        </div>
+      </section>
+    </>
   );
 }

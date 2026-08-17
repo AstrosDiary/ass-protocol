@@ -37,3 +37,14 @@ body {
 
 /* protocol numbers: IBM Plex Mono, tabular — apply via .font-mono + this */
 .tabular { font-variant-numeric: tabular-nums; }
+
+@keyframes flow-pulse {
+  0% { transform: translateX(0); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateX(var(--flow-dist, 120px)); opacity: 0; }
+}
+.flow-dot { animation: flow-pulse 2.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .flow-dot { animation: none; opacity: 0; }
+}

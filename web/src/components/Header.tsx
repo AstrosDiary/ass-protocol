@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -7,12 +8,14 @@ import { shortAddr, ADDR } from "@/lib/ass";
 
 const NAV = [
   { href: "/", label: "HOME" },
-  { href: "/market-desk", label: "MARKET DESK" },
-  { href: "/my-desk", label: "MY DESK" },
+  { href: "/market-desk", label: "ASIA DESK" },
+  { href: "/my-desk", label: "MY ASIAFOLIO" },
   { href: "/docs", label: "DOCS" },
 ];
 
 export function Header() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const path = usePathname();
   const { address, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
@@ -38,17 +41,18 @@ export function Header() {
         </nav>
         <div className="flex items-center gap-3">
           <a href={`https://flap.sh/bnb/${ADDR.token}`} target="_blank" rel="noreferrer"
-            className="rounded-lg bg-deep-purple px-4 py-2 font-display text-sm text-cream hover:bg-ass-purple transition-colors">
+            className="rounded-lg bg-deep-purple px-4 py-2 font-display font-bold text-sm text-cream hover:bg-ass-purple transition-colors">
             BUY $ASS
           </a>
-          {isConnected ? (
+          {mounted && isConnected ? (
             <button onClick={() => disconnect()}
-              className="rounded-lg border border-warm-white/15 bg-deep-navy px-4 py-2 font-mono text-sm text-warm-white tabular">
+              className="rounded-lg hover:cursor-pointer border border-warm-white/15 bg-deep-navy px-4 py-2 font-mono text-sm text-warm-white tabular">
               {shortAddr(address!)}
             </button>
           ) : (
             <button onClick={() => connect({ connector: connectors[0] })}
-              className="rounded-lg border border-warm-white/15 bg-deep-navy px-4 py-2 font-display text-sm text-warm-white hover:border-lavender/50 transition-colors">
+              className="rounded-lg hover:cursor-pointer border border-warm-white/15 bg-deep-navy px-4 py-2 font-display text-sm text-warm-white hover:border-lavender/50 transition-colors"
+              suppressHydrationWarning>
               CONNECT WALLET
             </button>
           )}
