@@ -1,64 +1,56 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { ADDR } from "@/lib/ass";
 
-const NODES = [
-  { label: "TRADE", value: "$ASS", caption: "3% TAX",
-    detail: "Every buy and sell feeds the strategy." },
-  { label: "VAULT", value: "BNB", caption: "BNB RECEIVED",
-    detail: "Trading tax accumulates as BNB." },
-  { label: "BUY ASIA", value: "BABAB · TSMB · SKHYB", caption: "bSTOCKS ACQUIRED",
-    detail: "BNB becomes Alibaba, TSMC and SK Hynix." },
-  { label: "ACCRUE", value: "WALLET", caption: "AUTO-UPDATED",
-    detail: "Eligible holders update automatically." },
-];
-
-const PROOFS = [
-  { label: "BNB CHAIN", detail: "Launched on BNB Chain via flap.sh — liquidity locked by the launchpad." },
-  { label: "AUTOMATIC", detail: "No staking, no claiming, no manual actions — the protocol runs itself." },
-  { label: "15-MIN CYCLE", detail: "A recurring heartbeat converts accumulated tax into the basket." },
-  { label: "ON-CHAIN VERIFIED", detail: "Vault, executor and distributor activity can be followed directly on BscScan." },
-];
-
 export function WhyAss() {
+  const t = useTranslations("why");
   const [active, setActive] = useState(0);
   const [frozen, setFrozen] = useState(false);
   const [proof, setProof] = useState<number | null>(null);
   const reduced = useRef(false);
 
+  const NODES = [
+    { label: t("n1Label"), value: "$ASS", caption: "3% TAX", detail: t("n1Detail") },
+    { label: t("n2Label"), value: "BNB", caption: "BNB RECEIVED", detail: t("n2Detail") },
+    { label: t("n3Label"), value: "BABAB · TSMB · SKHYB", caption: "bSTOCKS ACQUIRED", detail: t("n3Detail") },
+    { label: t("n4Label"), value: t("n4Value"), caption: "AUTO-UPDATED", detail: t("n4Detail") },
+  ];
+  const PROOFS = [
+    { label: "BNB CHAIN", detail: t("p1Detail") },
+    { label: t("p2Label"), detail: t("p2Detail") },
+    { label: t("p3Label"), detail: t("p3Detail") },
+    { label: t("p4Label"), detail: t("p4Detail") },
+  ];
+
   useEffect(() => {
     reduced.current = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduced.current) return;
     const id = setInterval(() => {
-      setActive((a) => (frozen ? a : (a + 1) % NODES.length));
+      setActive((a) => (frozen ? a : (a + 1) % 4));
     }, 2600);
     return () => clearInterval(id);
   }, [frozen]);
 
   return (
     <section className="mx-auto max-w-7xl px-4 py-18">
-      {/* ============ thesis: headline + research stats ============ */}
       <div className="grid items-start gap-12 lg:grid-cols-[55fr_45fr]">
         <div>
-          <p className="font-mono text-xs tracking-[0.25em] text-muted-grey">| WHY <strong>$ASS</strong></p>
+          <p className="font-mono text-xs tracking-[0.25em] text-muted-grey">| {t("eyebrow")} <strong>$ASS</strong></p>
           <h2 className="mt-4 font-display text-5xl font-bold leading-[0.98] tracking-tight md:text-6xl">
-            <span className="text-cream">THE CHAIN IS BNB.</span><br />
-            <span className="text-ass-purple">THE THESIS IS <span style={{ textDecoration: 'underline' }}>ASIA.</span></span>
+            <span className="text-cream">{t("headline1")}</span><br />
+            <span className="text-ass-purple">{t("headline2")} <span style={{ textDecoration: "underline" }}>{t("headline2u")}</span></span>
           </h2>
-          <p className="mt-6 max-w-lg text-lg leading-relaxed text-warm-white/85">
-            APAC is crypto&rsquo;s fastest-growing region. Asia sits at the centre of
-            global semiconductor manufacturing. $ASS turns BNB Chain trading
-            activity into automatically accrued Alibaba, TSMC and SK Hynix bStocks.
-          </p>
+          <p className="mt-6 max-w-lg text-lg leading-relaxed text-warm-white/85">{t("intro")}</p>
         </div>
         <div className="grid gap-8 sm:grid-cols-3 lg:pt-10">
           {[
-            ["+69%", "APAC ON-CHAIN GROWTH", "2025 // CHAINALYSIS"],
-            [">80%", "GLOBAL SEMICONDUCTORS MADE IN ASIA", "ADB"],
-            ["3", "ASIAN bSTOCKS", "AUTO-ACCRUED BY $ASS"],
+            ["+69%", t("stat1Label"), "2025 // CHAINALYSIS"],
+            [">80%", t("stat2Label"), "ADB"],
+            ["3", t("stat3Label"), t("stat3Src")],
           ].map(([n, l, src]) => (
             <div key={l}>
-              <div className="font-mono text-5xl text-cream tabular md:text-5xl">{n}</div>
+              <div className="font-mono text-5xl text-cream tabular">{n}</div>
               <div className="mt-2 text-[11px] font-medium leading-snug tracking-widest text-warm-white/70">{l}</div>
               <div className="mt-1 font-mono text-[10px] tracking-widest text-muted-grey">{src}</div>
             </div>
@@ -66,10 +58,7 @@ export function WhyAss() {
         </div>
       </div>
 
-      {/* ============ the engine — horizontal capital flow ============ */}
-      <p className="mt-20 font-display text-2xl font-bold tracking-tight text-cream md:text-3xl">
-        EVERY TRADE FUNDS ASIA.
-      </p>
+      <p className="mt-20 font-display text-2xl font-bold tracking-tight text-cream md:text-3xl">{t("engineHeadline")}</p>
       <div className="mt-4 overflow-hidden rounded-md border border-term-border bg-term-bg">
         <div className="flex items-center justify-between border-b border-term-border px-4 py-2.5 font-mono text-sm">
           <span className="tracking-wider text-term-text">$ASS STRATEGY ENGINE</span>
@@ -78,9 +67,7 @@ export function WhyAss() {
           </span>
         </div>
 
-        <div className="px-4 py-8 md:px-8"
-          onMouseLeave={() => setFrozen(false)}>
-          {/* flow line + travelling pulse */}
+        <div className="px-4 py-8 md:px-8" onMouseLeave={() => setFrozen(false)}>
           <div className="relative">
             <div className="absolute left-[12.5%] right-[12.5%] top-[9px] h-px bg-term-border" />
             <span className="flow-dot absolute left-[12.5%] top-[7px] h-[5px] w-[5px] rounded-full bg-ass-purple"
@@ -89,7 +76,7 @@ export function WhyAss() {
               {NODES.map((n, i) => {
                 const on = i === active;
                 return (
-                  <button key={n.label} type="button"
+                  <button key={i} type="button"
                     onMouseEnter={() => { setActive(i); setFrozen(true); }}
                     onFocus={() => { setActive(i); setFrozen(true); }}
                     onClick={() => { setActive(i); setFrozen(true); }}
@@ -107,23 +94,20 @@ export function WhyAss() {
               })}
             </div>
           </div>
-          {/* single explanation line for the active node */}
           <p className="mt-7 text-center font-mono text-sm text-warm-white/80" aria-live="polite">
             {NODES[active].detail}
           </p>
         </div>
 
         <div className="border-t border-term-border px-4 py-2 font-mono text-[11px] tracking-widest text-term-dim">
-          EVERY CYCLE BUYS ASIA.
+          {t("engineFooter")}
         </div>
       </div>
 
-      {/* ============ proof strip ============ */}
       <div className="mt-8">
-        <div className="flex flex-wrap items-center gap-x-8 gap-y-3"
-          onMouseLeave={() => setProof(null)}>
+        <div className="flex flex-wrap items-center gap-x-8 gap-y-3" onMouseLeave={() => setProof(null)}>
           {PROOFS.map((p, i) => (
-            <button key={p.label} type="button"
+            <button key={i} type="button"
               onMouseEnter={() => setProof(i)} onFocus={() => setProof(i)} onClick={() => setProof(i)}
               className={`flex items-center gap-2 font-mono text-xs tracking-widest transition-colors ${
                 proof === i ? "text-warm-white" : "text-muted-grey hover:text-warm-white/80"}`}>
@@ -133,7 +117,7 @@ export function WhyAss() {
           ))}
           <a href={`https://bscscan.com/address/${ADDR.distributor}`} target="_blank" rel="noreferrer"
             className="font-mono text-xs tracking-widest text-lavender transition-colors hover:text-violet">
-            VIEW CONTRACTS ↗
+            {t("viewContracts")} ↗
           </a>
         </div>
         <p className={`mt-3 min-h-5 font-mono text-sm text-warm-white/70 transition-opacity duration-300 ${
@@ -141,7 +125,6 @@ export function WhyAss() {
           {proof === null ? "" : PROOFS[proof].detail}
         </p>
       </div>
-
     </section>
   );
 }

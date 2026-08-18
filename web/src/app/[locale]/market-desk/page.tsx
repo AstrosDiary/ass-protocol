@@ -1,5 +1,6 @@
 "use client";
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 import { STOCKS, fmtUnits, formatBStockAmount, shortAddr } from "@/lib/ass";
 import { useProtocolStats, useAssetCards, useMarkets, useIndexerProtocol, useExecutionFeed, usd, pct } from "@/lib/hooks";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
@@ -7,6 +8,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 const stockBy = (addr: string) => STOCKS.find((s) => s.address.toLowerCase() === addr.toLowerCase());
 
 export default function MarketDesk() {
+  const t = useTranslations("desk");
   const { data: stats } = useProtocolStats();
   const { data: cards } = useAssetCards();
   const { data: markets } = useMarkets();
@@ -32,15 +34,15 @@ export default function MarketDesk() {
   const totalW = cards?.reduce((a, c) => a + c.weightBps, 0) ?? 0;
 
   const kpis = [
-    { label: "bSTOCKS ACCRUED", value: accruedUsd == null ? "—" : usd(accruedUsd) },
-    { label: "BNB PROCESSED", value: stats ? fmtUnits(stats.cumulativeBnbProcessed) : "—" },
-    { label: "HOLDERS", value: idx ? String(idx.holders) : "—" },
-    { label: "$ASS 24H VOLUME", value: usd(markets?.ass.volume24h ?? null, 0) },
+    { label: t("kpiAccrued"), value: accruedUsd == null ? "—" : usd(accruedUsd) },
+    { label: t("kpiProcessed"), value: stats ? fmtUnits(stats.cumulativeBnbProcessed) : "—" },
+    { label: t("kpiHolders"), value: idx ? String(idx.holders) : "—" },
+    { label: t("kpiVolume"), value: usd(markets?.ass.volume24h ?? null, 0) },
   ];
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10">
-      <h1 className="font-display text-4xl font-bold tracking-tight text-cream">ASIA DESK</h1>
+      <h1 className="font-display text-4xl font-bold tracking-tight text-cream">{t("title")}</h1>
 
       {/* KPIs */}
       <div className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-warm-white/10 bg-warm-white/10 md:grid-cols-4">
@@ -54,13 +56,12 @@ export default function MarketDesk() {
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[62fr_38fr]">
         {/* chart */}
-        {/* chart */}
         <div className="flex flex-col rounded-xl border border-warm-white/10 bg-midnight p-10">
-          <h2 className="font-display text-xs tracking-[0.25em] text-muted-grey">BNB PROCESSED OVER TIME</h2>
+          <h2 className="font-display text-xs tracking-[0.25em] text-muted-grey">{t("chartTitle")}</h2>
           <div className="mt-6 h-80 min-h-0 flex-1">
             {chart.length ? (
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chart} margin={{ top: 8, right: 24, bottom: 8, left:24 }}>
+                <AreaChart data={chart} margin={{ top: 8, right: 24, bottom: 8, left: 24 }}>
                   <defs>
                     <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#9747FF" stopOpacity={0.35} />
@@ -71,14 +72,14 @@ export default function MarketDesk() {
                   <XAxis dataKey="day" stroke="#A9A2B8" fontSize={11} tickLine={false}
                     axisLine={{ stroke: "rgba(245,241,232,0.1)" }} tickMargin={12} dy={4}
                     style={{ fontFamily: "var(--font-mono)" }}
-                    label={{ value: "DATE (UTC)", position: "insideBottom", offset: -8,
+                    label={{ value: t("chartX"), position: "insideBottom", offset: -8,
                       fill: "#A9A2B8", fontSize: 10, letterSpacing: "0.2em" }} />
                   <YAxis stroke="#A9A2B8" fontSize={11} tickLine={false}
                     axisLine={{ stroke: "rgba(245,241,232,0.1)" }} width={64} tickMargin={8}
                     tickCount={7} domain={[0, (max: number) => max * 1.15]}
                     tickFormatter={(v) => v.toFixed(3)}
                     style={{ fontFamily: "var(--font-mono)" }}
-                    label={{ value: "CUMULATIVE BNB", angle: -90, position: "insideLeft",
+                    label={{ value: t("chartY"), angle: -90, position: "insideLeft",
                       offset: -12, fill: "#A9A2B8", fontSize: 10, letterSpacing: "0.2em" }} />
                   <Tooltip contentStyle={{ background: "#0B0D18", border: "1px solid rgba(245,241,232,0.1)",
                       borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 12 }}
@@ -89,7 +90,7 @@ export default function MarketDesk() {
               </ResponsiveContainer>
             ) : (
               <div className="flex h-full items-center justify-center font-mono text-xs tracking-widest text-term-dim">
-                AWAITING INDEXER DATA
+                {t("chartEmpty")}
               </div>
             )}
           </div>
@@ -97,7 +98,7 @@ export default function MarketDesk() {
 
         {/* allocation — data-driven, never hardcoded */}
         <div className="rounded-xl border border-warm-white/10 bg-midnight p-5">
-          <h2 className="font-display text-xs tracking-[0.25em] text-muted-grey">BASKET ALLOCATION</h2>
+          <h2 className="font-display text-xs tracking-[0.25em] text-muted-grey">{t("allocTitle")}</h2>
           <div className="mt-5 space-y-4">
             {STOCKS.map((s) => {
               const c = cards?.find((x) => x.asset.toLowerCase() === s.address.toLowerCase());
@@ -115,13 +116,11 @@ export default function MarketDesk() {
               );
             })}
           </div>
-          {/* IMAGE: Strategist Terminal panel — rear/over-shoulder character at
-              terminal, per spec. Drop at /public/brand/strategist-terminal.png */}
           <div className="relative mt-6 h-56 overflow-hidden rounded-lg border border-warm-white/10">
             <Image src="/brand/strategist-terminal.png" alt="Strategy Desk" fill className="object-cover" />
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ass-black/90 to-transparent p-3">
               <p className="font-mono text-[11px] tracking-widest text-term-dim">STRATEGY DESK <span className="text-gain">● ACTIVE</span></p>
-              <p className="mt-0.5 text-sm text-warm-white/85">We don&rsquo;t predict markets. We structure advantage.</p>
+              <p className="mt-0.5 text-sm text-warm-white/85">{t("strategistQuote")}</p>
             </div>
           </div>
         </div>
@@ -130,15 +129,15 @@ export default function MarketDesk() {
       <div className="mt-6 grid gap-6 lg:grid-cols-[55fr_45fr]">
         {/* basket holdings */}
         <div className="rounded-xl border border-warm-white/10 bg-midnight p-5">
-          <h2 className="font-display text-xs tracking-[0.25em] text-muted-grey">BASKET</h2>
+          <h2 className="font-display text-xs tracking-[0.25em] text-muted-grey">{t("basketTitle")}</h2>
           <table className="mt-3 w-full font-mono text-sm tabular">
             <thead>
               <tr className="text-left text-[11px] tracking-widest text-muted-grey">
-                <th className="py-2 font-normal">ASSET</th>
-                <th className="py-2 text-right font-normal">PRICE</th>
-                <th className="py-2 text-right font-normal">24H</th>
-                <th className="py-2 text-right font-normal">ACQUIRED</th>
-                <th className="py-2 text-right font-normal">ACCRUED</th>
+                <th className="py-2 font-normal">{t("thAsset")}</th>
+                <th className="py-2 text-right font-normal">{t("thPrice")}</th>
+                <th className="py-2 text-right font-normal">{t("th24h")}</th>
+                <th className="py-2 text-right font-normal">{t("thAcquired")}</th>
+                <th className="py-2 text-right font-normal">{t("thAccrued")}</th>
               </tr>
             </thead>
             <tbody>
@@ -166,7 +165,7 @@ export default function MarketDesk() {
 
         {/* execution feed */}
         <div className="rounded-md border border-term-border bg-term-bg p-5">
-          <h2 className="font-mono text-xs tracking-[0.25em] text-term-dim"><strong>$ASS</strong> EXECUTION FEED</h2>
+          <h2 className="font-mono text-xs tracking-[0.25em] text-term-dim"><strong>$ASS</strong> {t("feedTitle")}</h2>
           <div className="mt-3 space-y-1.5 font-mono text-[13px] tabular">
             {feed?.length ? feed.slice(0, 12).map((f) => {
               const s = stockBy(f.asset);
@@ -181,7 +180,7 @@ export default function MarketDesk() {
                 </a>
               );
             }) : (
-              <div className="py-8 text-center text-xs tracking-widest text-term-dim">NO EXECUTIONS INDEXED YET</div>
+              <div className="py-8 text-center text-xs tracking-widest text-term-dim">{t("feedEmpty")}</div>
             )}
           </div>
         </div>

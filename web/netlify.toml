@@ -6,3 +6,15 @@
   to = "http://YOUR_VPS_IP:8788/:splat"
   status = 200
   force = true
+[[redirects]]
+  from = "/docs"
+  to = "/en/docs"
+  status = 301
+[[redirects]]
+  from = "/market-desk"
+  to = "/en/market-desk"
+  status = 301
+[[redirects]]
+  from = "/my-desk"
+  to = "/en/my-desk"
+  status = 301

@@ -107,7 +107,10 @@ export function useExecutionFeed() {
 }
 
 /* ---------- display helpers ---------- */
-export const usd = (n: number | null | undefined, dp = 2) =>
-  n == null ? "—" : `$${n.toLocaleString("en-GB", { maximumFractionDigits: dp, minimumFractionDigits: n < 1 ? 4 : dp })}`;
+export const usd = (n: number | null | undefined, dp = 2) => {
+  if (n == null) return "—";
+  const decimals = n !== 0 && Math.abs(n) < 1 ? Math.max(dp, 4) : dp;
+  return `$${n.toLocaleString("en-GB", { minimumFractionDigits: Math.min(decimals, dp), maximumFractionDigits: decimals })}`;
+};
 export const pct = (n: number | null | undefined) =>
   n == null ? "" : `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;

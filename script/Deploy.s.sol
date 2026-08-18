@@ -30,14 +30,14 @@ contract Deploy is Script {
         AssDistributor dist = new AssDistributor(deployer);
 
         // --- basket, verified against Binance collateral data pre-deploy ---
-        address[4] memory stocks = [
+        address[3] memory stocks = [
             0x4eF9d3062c7F6ebA4AAE4990c5036598C6eff4ec, // BABAB
             0xAB78b89B5bb00236Be0B4B20704cBfa04EfC711c, // TSMB
-            0xCA750eF65f295BBECd685Abf54e82CAf297BDB61, // SKHYB
-            0xBE82F76637DBA2C114C41Df856c2C51e522E2Cb8  // EWYB
+            0xCA750eF65f295BBECd685Abf54e82CAf297BDB61 // SKHYB
         ];
-        for (uint256 i; i < 4; ++i) {
-            engine.addAsset(stocks[i], 2500, 25 ether); // 25% each, 25 WBNB/buy cap
+        uint16[3] memory weights = [uint16(3334), 3333, 3333]; // sums to 10_000
+        for (uint256 i; i < 3; ++i) {
+            engine.addAsset(stocks[i], weights[i], 25 ether); // per-buy cap: revisit units in QQQB pass
             dist.addAsset(stocks[i]);
         }
 

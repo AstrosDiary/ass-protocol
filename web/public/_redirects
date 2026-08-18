@@ -1,0 +1,4 @@
+/indexer/*  http://192.248.162.191:8788/:splat  200
+/docs  /en/docs  301
+/market-desk  /en/market-desk  301
+/my-desk  /en/my-desk  301

@@ -109,7 +109,7 @@ contract AssVault is Initializable, AccessControlUpgradeable, VaultBaseV2 {
         schema.vaultType = "AsianStockStrategyVault";
         schema.description =
             "Accumulates $ASS tax revenue (BNB) and routes it to the ASS Engine, which buys "
-            "Asian bStocks (BABAB, TSMB, SKHYB, EWYB) and distributes them pro-rata to eligible holders.";
+            "Asian bStocks (BABAB, TSMB, SKHYB) and distributes them pro-rata to eligible holders.";
         schema.methods = new VaultMethodSchema[](4);
 
         schema.methods[0].name = "pendingBnb";

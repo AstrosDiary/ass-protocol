@@ -28,7 +28,7 @@ contract E2ETest is Test {
     MockRouter pancake;
     MockRouter nativeRfq;
 
-    MockBStock babab; MockBStock tsmb; MockBStock skhyb; MockBStock ewyb;
+    MockBStock babab; MockBStock tsmb; MockBStock skhyb; MockBStock stock4;
     address[] stocks;
 
     address deployer = makeAddr("deployer"); // owner AND keeper, per your call
@@ -53,8 +53,8 @@ contract E2ETest is Test {
         tracker = new MockFlapDividend();
         pancake = new MockRouter();
         nativeRfq = new MockRouter();
-        babab = new MockBStock(); tsmb = new MockBStock(); skhyb = new MockBStock(); ewyb = new MockBStock();
-        stocks = [address(babab), address(tsmb), address(skhyb), address(ewyb)];
+        babab = new MockBStock(); tsmb = new MockBStock(); skhyb = new MockBStock(); stock4 = new MockBStock();
+        stocks = [address(babab), address(tsmb), address(skhyb), address(stock4)];
 
         vm.startPrank(deployer);
         engine = new AssEngine(address(wbnb), deployer);
@@ -94,12 +94,12 @@ contract E2ETest is Test {
         (bool ok,) = address(vault).call{value: 20 ether}("");
         assertTrue(ok);
 
-        // 2. keeper heartbeat: release -> wrap+split -> four buys (EWYB via RFQ router)
+        // 2. keeper heartbeat: release -> wrap+split -> four buys (asset-4 via RFQ router)
         vm.startPrank(deployer);
         vault.release();
         engine.processRevenue();
         for (uint256 i; i < 4; ++i) {
-            MockRouter r = stocks[i] == address(ewyb) ? nativeRfq : pancake;
+            MockRouter r = stocks[i] == address(stock4) ? nativeRfq : pancake;
             assertTrue(engine.executeBuy(
                 stocks[i], address(r), _cd(r, stocks[i], 5 ether),
                 5 ether, 450e18, block.timestamp + 60
@@ -127,8 +127,8 @@ contract E2ETest is Test {
         assertEq(uint8(dist.phase()), 0);
     }
 
-    /// Spec headline scenario: EWYB has no quote this cycle. Three assets pay,
-    /// EWYB's budget carries; next heartbeat it catches up. Nothing reverts.
+    /// Spec headline scenario: asset-4 has no quote this cycle. Three assets pay,
+    /// asset-4's budget carries; next heartbeat it catches up. Nothing reverts.
     function test_E2E_OneAssetDown_CarryForward_ThenCatchUp() public {
         hoax(taxProcessor, 20 ether);
         (bool ok,) = address(vault).call{value: 20 ether}(""); assertTrue(ok);
@@ -139,9 +139,9 @@ contract E2ETest is Test {
         vault.release();
         engine.processRevenue();
         for (uint256 i; i < 4; ++i) {
-            MockRouter r = stocks[i] == address(ewyb) ? nativeRfq : pancake;
+            MockRouter r = stocks[i] == address(stock4) ? nativeRfq : pancake;
             engine.executeBuy(stocks[i], address(r), _cd(r, stocks[i], 5 ether),
-                5 ether, 450e18, block.timestamp + 60); // EWYB returns false, others true
+                5 ether, 450e18, block.timestamp + 60); // asset-4 returns false, others true
         }
         dist.startCycle();
         address[] memory hs = new address[](3);
@@ -152,20 +152,20 @@ contract E2ETest is Test {
         vm.stopPrank();
 
         assertEq(babab.balanceOf(h3), 300e18);              // three assets paid
-        assertEq(ewyb.balanceOf(h3), 0);                    // EWYB skipped cleanly
-        assertEq(engine.budget(address(ewyb)), 5 ether);    // budget carried
+        assertEq(stock4.balanceOf(h3), 0);                    // asset-4 skipped cleanly
+        assertEq(engine.budget(address(stock4)), 5 ether);    // budget carried
 
-        // next heartbeat: RFQ back, EWYB catches up alone
+        // next heartbeat: RFQ back, asset-4 catches up alone
         nativeRfq.setMode(MockRouter.Mode.Honest);
         vm.startPrank(deployer);
-        assertTrue(engine.executeBuy(address(ewyb), address(nativeRfq),
-            _cd(nativeRfq, address(ewyb), 5 ether), 5 ether, 450e18, block.timestamp + 60));
+        assertTrue(engine.executeBuy(address(stock4), address(nativeRfq),
+            _cd(nativeRfq, address(stock4), 5 ether), 5 ether, 450e18, block.timestamp + 60));
         dist.startCycle();
         dist.submitHolders(hs);
         dist.finalizeSnapshot();
         dist.pushPayouts(100);
         vm.stopPrank();
-        assertEq(ewyb.balanceOf(h3), 300e18);               // made whole
+        assertEq(stock4.balanceOf(h3), 300e18);               // made whole
     }
 
     /// Spec release gate: thousands of holders through paginated payouts.

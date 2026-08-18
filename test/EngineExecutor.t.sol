@@ -13,7 +13,7 @@ contract EngineExecutorTest is Test {
     AssSwapExecutor exec;
     MockWBNB wbnb;
     MockBStock babab;
-    MockBStock ewyb;
+    MockBStock stock4;
     MockRouter router;
     address owner = makeAddr("owner");
     address keeper = makeAddr("keeper");
@@ -22,7 +22,7 @@ contract EngineExecutorTest is Test {
     function setUp() public {
         wbnb = new MockWBNB();
         babab = new MockBStock();
-        ewyb = new MockBStock();
+        stock4 = new MockBStock();
         router = new MockRouter();
 
         engine = new AssEngine(address(wbnb), owner);
@@ -33,7 +33,7 @@ contract EngineExecutorTest is Test {
         engine.setExecutor(address(exec));
         engine.setDistributor(distributor);
         engine.addAsset(address(babab), 2500, 10 ether);
-        engine.addAsset(address(ewyb), 2500, 10 ether);
+        engine.addAsset(address(stock4), 2500, 10 ether);
         exec.setEngine(address(engine));
         exec.setRouter(address(router), true);
         vm.stopPrank();
@@ -48,7 +48,7 @@ contract EngineExecutorTest is Test {
         vm.prank(keeper);
         engine.processRevenue();
         assertEq(engine.budget(address(babab)), 2.5 ether);
-        assertEq(engine.budget(address(ewyb)), 2.5 ether);
+        assertEq(engine.budget(address(stock4)), 2.5 ether);
         assertEq(engine.unallocatedWbnb(), 5 ether); // 50% unweighted rolls forward
         assertEq(engine.cumulativeBnbProcessed(), 10 ether);
     }
@@ -75,12 +75,12 @@ contract EngineExecutorTest is Test {
         vm.startPrank(keeper);
         engine.processRevenue();
         bool ok = engine.executeBuy(
-            address(ewyb), address(router), _cd(address(ewyb), 1 ether),
+            address(stock4), address(router), _cd(address(stock4), 1 ether),
             1 ether, 90e18, block.timestamp + 60
         );
         vm.stopPrank();
         assertFalse(ok);                                   // isolated, not reverted
-        assertEq(engine.budget(address(ewyb)), 2.5 ether); // carry-forward automatic
+        assertEq(engine.budget(address(stock4)), 2.5 ether); // carry-forward automatic
         assertEq(wbnb.balanceOf(address(engine)), 10 ether); // funds fully unwound
     }
 
@@ -175,13 +175,13 @@ contract EngineExecutorTest is Test {
         vm.deal(address(engine), 10 ether);
         vm.startPrank(keeper);
         engine.processRevenue();
-        engine.reassignBudget(address(ewyb), address(babab), 1 ether); // EWYB stuck -> BABAB
+        engine.reassignBudget(address(stock4), address(babab), 1 ether); // asset-4 stuck -> BABAB
         vm.stopPrank();
         assertEq(engine.budget(address(babab)), 3.5 ether);
-        assertEq(engine.budget(address(ewyb)), 1.5 ether);
+        assertEq(engine.budget(address(stock4)), 1.5 ether);
         vm.prank(makeAddr("rando"));
         vm.expectRevert(AssEngine.NotKeeper.selector);
-        engine.reassignBudget(address(ewyb), address(babab), 1);
+        engine.reassignBudget(address(stock4), address(babab), 1);
     }
 
     function testFuzz_WeightSplit_NeverExceedsBalance(uint96 amount, uint16 w1, uint16 w2) public {
@@ -189,12 +189,12 @@ contract EngineExecutorTest is Test {
         w1 = uint16(bound(w1, 0, 5000)); w2 = uint16(bound(w2, 0, 5000));
         vm.startPrank(owner);
         engine.configureAsset(address(babab), true, w1, type(uint128).max);
-        engine.configureAsset(address(ewyb), true, w2, type(uint128).max);
+        engine.configureAsset(address(stock4), true, w2, type(uint128).max);
         vm.stopPrank();
         vm.deal(address(engine), amount);
         vm.prank(keeper);
         engine.processRevenue();
-        assertLe(engine.budget(address(babab)) + engine.budget(address(ewyb)),
+        assertLe(engine.budget(address(babab)) + engine.budget(address(stock4)),
                  wbnb.balanceOf(address(engine)));
     }
 }
