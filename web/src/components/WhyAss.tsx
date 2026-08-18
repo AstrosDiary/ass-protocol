@@ -51,14 +51,14 @@ export function WhyAss() {
             activity into automatically accrued Alibaba, TSMC and SK Hynix bStocks.
           </p>
         </div>
-        <div className="grid grid-cols-3 gap-6 lg:pt-10">
+        <div className="grid gap-8 sm:grid-cols-3 lg:pt-10">
           {[
             ["+69%", "APAC ON-CHAIN GROWTH", "2025 // CHAINALYSIS"],
             [">80%", "GLOBAL SEMICONDUCTORS MADE IN ASIA", "ADB"],
             ["3", "ASIAN bSTOCKS", "AUTO-ACCRUED BY $ASS"],
           ].map(([n, l, src]) => (
             <div key={l}>
-              <div className="font-mono text-4xl text-cream tabular md:text-5xl">{n}</div>
+              <div className="font-mono text-5xl text-cream tabular md:text-5xl">{n}</div>
               <div className="mt-2 text-[11px] font-medium leading-snug tracking-widest text-warm-white/70">{l}</div>
               <div className="mt-1 font-mono text-[10px] tracking-widest text-muted-grey">{src}</div>
             </div>

@@ -1,7 +1,7 @@
 "use client";
-import { useReadContract } from "wagmi";
+import { useReadContract, useReadContracts } from "wagmi";
 import { useQuery } from "@tanstack/react-query";
-import { ADDR, VIEWS_ABI, STOCKS } from "./ass";
+import { ERC20_ABI, TRACKER_ABI, ADDR, VIEWS_ABI, STOCKS, INDEXER } from "./ass";
 
 /* ---------- on-chain (AssViews = source of truth) ---------- */
 
@@ -24,6 +24,28 @@ export function useHolderCard(address?: `0x${string}`) {
     address: ADDR.views, abi: VIEWS_ABI, functionName: "holderCard",
     args: address ? [address] : undefined,
     query: { enabled: !!address, refetchInterval: 30_000 },
+  });
+}
+
+export function useWallet(address?: `0x${string}`) {
+  return useReadContracts({
+    contracts: address ? [
+      ...STOCKS.map((s) => ({ address: s.address, abi: ERC20_ABI, functionName: "balanceOf" as const, args: [address] as const })),
+      { address: ADDR.token, abi: ERC20_ABI, functionName: "balanceOf" as const, args: [address] as const },
+      { address: ADDR.tracker, abi: TRACKER_ABI, functionName: "userInfo" as const, args: [address] as const },
+      { address: ADDR.tracker, abi: TRACKER_ABI, functionName: "minimumShareBalance" as const },
+    ] : [],
+    query: { enabled: !!address, refetchInterval: 30_000 },
+  });
+}
+
+export function useHolderHistory(address?: `0x${string}`) {
+  return useQuery({
+    queryKey: ["idx-holder", address],
+    queryFn: async () => (await fetch(`${INDEXER}/holder/${address}`)).json() as Promise<{
+      share: string; paid: { ts: number; tx: string; asset: string; amount: string }[];
+    }>,
+    enabled: !!INDEXER && !!address, refetchInterval: 30_000,
   });
 }
 
@@ -61,6 +83,26 @@ export function useMarkets() {
       };
     },
     refetchInterval: 60_000,
+  });
+}
+
+export function useIndexerProtocol() {
+  return useQuery({
+    queryKey: ["idx-protocol"],
+    queryFn: async () => (await fetch(`${INDEXER}/protocol`)).json() as Promise<{
+      holders: number; cumProcessed: string; history: { day: string; cum: string }[];
+    }>,
+    enabled: !!INDEXER, refetchInterval: 30_000,
+  });
+}
+
+export function useExecutionFeed() {
+  return useQuery({
+    queryKey: ["idx-feed"],
+    queryFn: async () => (await fetch(`${INDEXER}/feed`)).json() as Promise<{
+      ts: number; block: number; tx: string; action: string; asset: string; wbnbSpent: string; received: string;
+    }[]>,
+    enabled: !!INDEXER, refetchInterval: 30_000,
   });
 }
 
