@@ -17,6 +17,7 @@ contract AssVaultFactory is VaultFactoryBaseV2 {
     address public immutable beacon;
 
     /// @dev the exact launch profile this factory permits
+    address public constant REQUIRED_QUOTE = 0x205812CdBed920aFf76C6580abD681a46D11efc7; // QQQB
     uint16 public constant REQUIRED_BUY_TAX = 300;   // 3%
     uint16 public constant REQUIRED_SELL_TAX = 300;  // 3%
     uint256 public constant REQUIRED_MIN_SHARE = 10_000e18; // 10,000 $ASS
@@ -32,7 +33,7 @@ contract AssVaultFactory is VaultFactoryBaseV2 {
     /// @inheritdoc VaultFactoryBaseV2
     function vaultDataSchema() public pure override returns (VaultDataSchema memory schema) {
         schema.description =
-            "Asian Stock Strategy vault: accumulates tax BNB and converts it into a basket of "
+            "Asian Stock Strategy vault: accumulates tax QQQB and converts it into a basket of "
             "Asian bStocks distributed to holders. No configurable parameters - vaultData is ignored.";
         schema.fields = new FieldDescriptor[](0);
         schema.isArray = false;
@@ -45,7 +46,7 @@ contract AssVaultFactory is VaultFactoryBaseV2 {
     {
         if (msg.sender != _getVaultPortal()) revert OnlyVaultPortal();
         if (taxToken == address(0) || creator == address(0)) revert ZeroAddress();
-        require(quoteToken == address(0), "ASS: BNB quote only");
+        require(quoteToken == REQUIRED_QUOTE, "ASS: QQQB quote only");
 
         vault = address(new BeaconProxy(
             beacon,
@@ -55,7 +56,7 @@ contract AssVaultFactory is VaultFactoryBaseV2 {
     }
 
     function isQuoteTokenSupported(address quoteToken) external pure override returns (bool) {
-        return quoteToken == address(0); // native BNB pair only
+        return quoteToken == REQUIRED_QUOTE; // QQQB pair only
     }
 
     /// @dev v2.2 normalized validation: the ONLY launch this factory accepts
@@ -68,7 +69,7 @@ contract AssVaultFactory is VaultFactoryBaseV2 {
         returns (bool, string memory)
     {
         if (d.tokenVersion != IPortalTypes.TokenVersion.TOKEN_TAXED_V3) return (false, "tokenVersion must be TOKEN_TAXED_V3");
-        if (d.quoteToken != address(0)) return (false, "quote token must be native BNB");
+        if (d.quoteToken != REQUIRED_QUOTE) return (false, "quote token must be QQQB");
         if (d.buyTaxRate != REQUIRED_BUY_TAX) return (false, "buy tax must be 3% (300 bps)");
         if (d.sellTaxRate != REQUIRED_SELL_TAX) return (false, "sell tax must be 3% (300 bps)");
         if (d.vaultBps != REQUIRED_VAULT_BPS) return (false, "vault must receive 100% of tax remainder");
@@ -82,7 +83,7 @@ contract AssVaultFactory is VaultFactoryBaseV2 {
     /// @dev informational mirror of _validateBeforeLaunch for the launch UI
     function tokenCreationPolicies() public pure override returns (FactoryPolicy[] memory p) {
         p = new FactoryPolicy[](6);
-        p[0] = FactoryPolicy("quoteToken", "eq", abi.encode(address(0)), "Quote token must be native BNB.");
+        p[0] = FactoryPolicy("quoteToken", "eq", abi.encode(REQUIRED_QUOTE), "Quote token must be QQQB (Invesco QQQ Trust bStock).");
         p[1] = FactoryPolicy("buyTaxRate", "eq", abi.encode(uint256(REQUIRED_BUY_TAX)), "Buy tax must be 3%.");
         p[2] = FactoryPolicy("sellTaxRate", "eq", abi.encode(uint256(REQUIRED_SELL_TAX)), "Sell tax must be 3%.");
         p[3] = FactoryPolicy("dividendBps", "eq", abi.encode(uint256(0)), "Dividends run in tracker-only mode (bps 0).");

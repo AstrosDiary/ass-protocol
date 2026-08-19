@@ -9,22 +9,23 @@ import {IFlapDividend} from "../interfaces/IFlapDividend.sol";
 interface IAssVaultViews {
     function totalReceived() external view returns (uint256);
     function totalReleased() external view returns (uint256);
+    function pendingQuote() external view returns (uint256);
 }
 
-/// @title AssViews v1 — read-only aggregation for the $ASS web app and keeper
+/// @title AssViews v2 — read-only aggregation for the $ASS web app and keeper
 /// @notice Pure lens: no state, no admin, no funds. Batches protocol + holder
 /// state into single eth_calls so the frontend never loops RPC requests.
-/// All amounts RAW on-chain units — BEP-677 multiplier normalization is the
-/// display layer's job, never done here.
+/// All amounts RAW on-chain units (quote = QQQB) — BEP-677 multiplier
+/// normalization is the display layer's job, never done here.
 contract AssViews {
-    string public constant VERSION = "1.0.0";
+    string public constant VERSION = "2.0.0";
 
     IAssVaultViews public immutable vault;
     AssEngine public immutable engine;
     AssDistributor public immutable distributor;
     IFlapDividend public immutable tracker;
 
-    constructor(address vault_, address payable engine_, address distributor_, address tracker_) {
+    constructor(address vault_, address engine_, address distributor_, address tracker_) {
         vault = IAssVaultViews(vault_);
         engine = AssEngine(engine_);
         distributor = AssDistributor(distributor_);
@@ -37,8 +38,8 @@ contract AssViews {
         bool enabledDistributor; // included in new payout cycles
         uint16 weightBps;
         uint128 maxSpendPerBuy;
-        uint256 budgetWbnb;          // carry-forward visible per asset
-        uint256 cumulativeSpentWbnb;
+        uint256 budgetQuote;         // carry-forward visible per asset (QQQB)
+        uint256 cumulativeSpentQuote;
         uint256 cumulativeBoughtRaw;
         uint256 cumulativeDistributedRaw;
         uint256 distributorBalanceRaw;   // bought, awaiting next cycle pot
@@ -47,12 +48,11 @@ contract AssViews {
     }
 
     struct ProtocolStats {
-        uint256 vaultTotalReceivedBnb;
-        uint256 vaultTotalReleasedBnb;
-        uint256 vaultPendingBnb;
-        uint256 engineUnwrappedBnb;
-        uint256 engineUnallocatedWbnb;
-        uint256 cumulativeBnbProcessed;
+        uint256 vaultTotalReceivedQuote;
+        uint256 vaultTotalReleasedQuote;
+        uint256 vaultPendingQuote;
+        uint256 engineUnallocatedQuote;   // revenue awaiting processRevenue + rounding dust
+        uint256 cumulativeQuoteProcessed;
         uint256 trackerTotalShares;
         uint256 trackerMinimumShare;
         uint8   distributorPhase;   // 0 Idle, 1 Snapshot, 2 Payout
@@ -67,12 +67,11 @@ contract AssViews {
     }
 
     function protocolStats() external view returns (ProtocolStats memory s) {
-        s.vaultTotalReceivedBnb = vault.totalReceived();
-        s.vaultTotalReleasedBnb = vault.totalReleased();
-        s.vaultPendingBnb = address(vault).balance;
-        s.engineUnwrappedBnb = address(engine).balance;
-        s.engineUnallocatedWbnb = engine.unallocatedWbnb();
-        s.cumulativeBnbProcessed = engine.cumulativeBnbProcessed();
+        s.vaultTotalReceivedQuote = vault.totalReceived();
+        s.vaultTotalReleasedQuote = vault.totalReleased();
+        s.vaultPendingQuote = vault.pendingQuote();
+        s.engineUnallocatedQuote = engine.unallocatedQuote();
+        s.cumulativeQuoteProcessed = engine.cumulativeQuoteProcessed();
         s.trackerTotalShares = tracker.totalShares();
         s.trackerMinimumShare = tracker.minimumShareBalance();
         s.distributorPhase = uint8(distributor.phase());
@@ -95,8 +94,8 @@ contract AssViews {
                 enabledDistributor: enD,
                 weightBps: w,
                 maxSpendPerBuy: cap,
-                budgetWbnb: engine.budget(a),
-                cumulativeSpentWbnb: engine.cumulativeSpent(a),
+                budgetQuote: engine.budget(a),
+                cumulativeSpentQuote: engine.cumulativeSpent(a),
                 cumulativeBoughtRaw: engine.cumulativeBought(a),
                 cumulativeDistributedRaw: distributor.cumulativeDistributed(a),
                 distributorBalanceRaw: IERC20(a).balanceOf(address(distributor)),

@@ -4,15 +4,25 @@ pragma solidity ^0.8.26;
 import {Script, console2} from "forge-std/Script.sol";
 import {AssViews} from "../src/views/AssViews.sol";
 
+/// Deploys AssViews v2 against a live $ASS deployment. Run AFTER launch +
+/// wiring (runbook Phase 3): the vault proxy and tracker exist only once the
+/// VaultPortal has created the token.
+/// FILL all four addresses from the current deployment — the script reverts
+/// until every one is set, so a stale run cannot half-fire.
 contract DeployViews is Script {
+    address constant VAULT = address(0);        // <- FILL: vault proxy (VaultCreated event / token launch)
+    address constant ENGINE = address(0);       // <- FILL: DeployCore output
+    address constant DISTRIBUTOR = address(0);  // <- FILL: DeployCore output
+    address constant TRACKER = address(0);      // <- FILL: token.dividendContract()
+
     function run() external {
+        require(VAULT != address(0), "FILL: VAULT");
+        require(ENGINE != address(0), "FILL: ENGINE");
+        require(DISTRIBUTOR != address(0), "FILL: DISTRIBUTOR");
+        require(TRACKER != address(0), "FILL: TRACKER");
+
         vm.startBroadcast();
-        AssViews views = new AssViews(
-            0x66A090818e449Dc542EEe8872b90Bed195103b48,          // vault
-            payable(0x57292Ce4ca3863e8E61986C038678296E91b6736), // engine
-            0xF9F57A1f85af621aF8c3a0c2Ae8fE9bb1D6eA875,          // distributor
-            0x8E82CfeB56993066289c9DBDB737c36183c33706           // tracker
-        );
+        AssViews views = new AssViews(VAULT, ENGINE, DISTRIBUTOR, TRACKER);
         vm.stopBroadcast();
         console2.log("views:", address(views));
     }

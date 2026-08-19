@@ -4,14 +4,13 @@ pragma solidity ^0.8.26;
 import {Test} from "forge-std/Test.sol";
 import {AssEngine} from "../src/engine/AssEngine.sol";
 import {AssSwapExecutor} from "../src/adapters/AssSwapExecutor.sol";
-import {MockWBNB} from "./mocks/MockWBNB.sol";
 import {MockBStock} from "./mocks/MockBStock.sol";
 import {MockRouter} from "./mocks/MockRouter.sol";
 
 contract EngineExecutorTest is Test {
     AssEngine engine;
     AssSwapExecutor exec;
-    MockWBNB wbnb;
+    MockBStock qqqb; // quote token (constructor-injected — no etching needed)
     MockBStock babab;
     MockBStock stock4;
     MockRouter router;
@@ -20,13 +19,13 @@ contract EngineExecutorTest is Test {
     address distributor = makeAddr("distributor");
 
     function setUp() public {
-        wbnb = new MockWBNB();
+        qqqb = new MockBStock();
         babab = new MockBStock();
         stock4 = new MockBStock();
         router = new MockRouter();
 
-        engine = new AssEngine(address(wbnb), owner);
-        exec = new AssSwapExecutor(address(wbnb), owner);
+        engine = new AssEngine(address(qqqb), owner);
+        exec = new AssSwapExecutor(address(qqqb), owner);
 
         vm.startPrank(owner);
         engine.setKeeper(keeper, true);
@@ -40,21 +39,35 @@ contract EngineExecutorTest is Test {
     }
 
     function _cd(address tokenOut, uint256 amountIn) internal view returns (bytes memory) {
-        return abi.encodeCall(MockRouter.swap, (address(wbnb), tokenOut, amountIn));
+        return abi.encodeCall(MockRouter.swap, (address(qqqb), tokenOut, amountIn));
     }
 
     function test_ProcessRevenue_SplitsByWeight_RemainderUnallocated() public {
-        vm.deal(address(engine), 10 ether);
+        qqqb.mint(address(engine), 10 ether);
         vm.prank(keeper);
         engine.processRevenue();
         assertEq(engine.budget(address(babab)), 2.5 ether);
         assertEq(engine.budget(address(stock4)), 2.5 ether);
-        assertEq(engine.unallocatedWbnb(), 5 ether); // 50% unweighted rolls forward
-        assertEq(engine.cumulativeBnbProcessed(), 10 ether);
+        assertEq(engine.unallocatedQuote(), 5 ether); // 50% unweighted rolls forward
+        // cumulative counts ALLOCATED only (double-count-proof): 5, not 10
+        assertEq(engine.cumulativeQuoteProcessed(), 5 ether);
+    }
+
+    function test_ProcessRevenue_UnallocatedRollsIn_NoDoubleCount() public {
+        // new coverage for the QQQB balance-sharing semantics: reprocessing
+        // must pick up ONLY the unearmarked remainder, never re-count budgets
+        qqqb.mint(address(engine), 10 ether);
+        vm.prank(keeper);
+        engine.processRevenue();                      // allocates 5, leaves 5 unallocated
+        vm.prank(keeper);
+        engine.processRevenue();                      // rolls the remaining 5: allocates 2.5
+        assertEq(engine.budget(address(babab)), 3.75 ether);
+        assertEq(engine.budget(address(stock4)), 3.75 ether);
+        assertEq(engine.cumulativeQuoteProcessed(), 7.5 ether); // 5 + 2.5, budgets never re-counted
     }
 
     function test_ExecuteBuy_Happy_StockLandsInDistributor() public {
-        vm.deal(address(engine), 10 ether);
+        qqqb.mint(address(engine), 10 ether);
         vm.startPrank(keeper);
         engine.processRevenue();
         bool ok = engine.executeBuy(
@@ -71,7 +84,7 @@ contract EngineExecutorTest is Test {
     // ---------------- failure isolation: budget survives every betrayal
     function test_RouterReverts_BudgetIntact_NoRevert() public {
         router.setMode(MockRouter.Mode.Revert);
-        vm.deal(address(engine), 10 ether);
+        qqqb.mint(address(engine), 10 ether);
         vm.startPrank(keeper);
         engine.processRevenue();
         bool ok = engine.executeBuy(
@@ -79,14 +92,14 @@ contract EngineExecutorTest is Test {
             1 ether, 90e18, block.timestamp + 60
         );
         vm.stopPrank();
-        assertFalse(ok);                                   // isolated, not reverted
+        assertFalse(ok);                                     // isolated, not reverted
         assertEq(engine.budget(address(stock4)), 2.5 ether); // carry-forward automatic
-        assertEq(wbnb.balanceOf(address(engine)), 10 ether); // funds fully unwound
+        assertEq(qqqb.balanceOf(address(engine)), 10 ether); // funds fully unwound
     }
 
     function test_UnderDelivery_SlippageCaughtByMeasuredDelta() public {
         router.setMode(MockRouter.Mode.UnderDeliver);
-        vm.deal(address(engine), 10 ether);
+        qqqb.mint(address(engine), 10 ether);
         vm.startPrank(keeper);
         engine.processRevenue();
         bool ok = engine.executeBuy(
@@ -101,7 +114,7 @@ contract EngineExecutorTest is Test {
 
     function test_WrongRecipient_DeltaZero_Reverts() public {
         router.setMode(MockRouter.Mode.WrongRecipient); // pays a thief, not executor
-        vm.deal(address(engine), 10 ether);
+        qqqb.mint(address(engine), 10 ether);
         vm.startPrank(keeper);
         engine.processRevenue();
         bool ok = engine.executeBuy(
@@ -114,7 +127,7 @@ contract EngineExecutorTest is Test {
 
     function test_PartialSpend_LeftoverReturnsToEngine_BudgetOnlyDebitedSpent() public {
         router.setMode(MockRouter.Mode.PartialSpend);
-        vm.deal(address(engine), 10 ether);
+        qqqb.mint(address(engine), 10 ether);
         vm.startPrank(keeper);
         engine.processRevenue();
         bool ok = engine.executeBuy(
@@ -124,12 +137,12 @@ contract EngineExecutorTest is Test {
         vm.stopPrank();
         assertTrue(ok);
         assertEq(engine.budget(address(babab)), 2 ether);  // only 0.5 spent
-        assertEq(wbnb.balanceOf(address(exec)), 0);        // nothing strands in executor
+        assertEq(qqqb.balanceOf(address(exec)), 0);        // nothing strands in executor
     }
 
     // ---------------- guardrails
     function test_RevertWhen_OverBudget() public {
-        vm.deal(address(engine), 1 ether);
+        qqqb.mint(address(engine), 1 ether);
         vm.startPrank(keeper);
         engine.processRevenue();
         vm.expectRevert(AssEngine.OverBudget.selector);
@@ -141,7 +154,7 @@ contract EngineExecutorTest is Test {
     function test_RevertWhen_OverMaxSpend() public {
         vm.prank(owner);
         engine.configureAsset(address(babab), true, 2500, 0.1 ether);
-        vm.deal(address(engine), 10 ether);
+        qqqb.mint(address(engine), 10 ether);
         vm.startPrank(keeper);
         engine.processRevenue();
         vm.expectRevert(AssEngine.OverMaxSpend.selector);
@@ -150,8 +163,14 @@ contract EngineExecutorTest is Test {
         vm.stopPrank();
     }
 
+    function test_RevertWhen_AssetIsQuote() public {
+        vm.prank(owner);
+        vm.expectRevert(AssEngine.AssetIsQuote.selector);
+        engine.addAsset(address(qqqb), 1000, 1 ether); // basket asset can never be the quote
+    }
+
     function test_ExecutorRejects_UnallowedRouter_ZeroMinOut_Deadline_Stranger() public {
-        vm.deal(address(engine), 10 ether);
+        qqqb.mint(address(engine), 10 ether);
         vm.prank(keeper); engine.processRevenue();
 
         MockRouter rogue = new MockRouter();
@@ -172,7 +191,7 @@ contract EngineExecutorTest is Test {
     }
 
     function test_ReassignBudget_KeeperOnly_BasketInternal() public {
-        vm.deal(address(engine), 10 ether);
+        qqqb.mint(address(engine), 10 ether);
         vm.startPrank(keeper);
         engine.processRevenue();
         engine.reassignBudget(address(stock4), address(babab), 1 ether); // asset-4 stuck -> BABAB
@@ -191,10 +210,10 @@ contract EngineExecutorTest is Test {
         engine.configureAsset(address(babab), true, w1, type(uint128).max);
         engine.configureAsset(address(stock4), true, w2, type(uint128).max);
         vm.stopPrank();
-        vm.deal(address(engine), amount);
+        qqqb.mint(address(engine), amount);
         vm.prank(keeper);
         engine.processRevenue();
         assertLe(engine.budget(address(babab)) + engine.budget(address(stock4)),
-                 wbnb.balanceOf(address(engine)));
+                 qqqb.balanceOf(address(engine)));
     }
 }

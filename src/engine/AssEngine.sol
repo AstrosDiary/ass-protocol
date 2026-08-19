@@ -5,19 +5,21 @@ import {Ownable} from "@openzeppelin/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/utils/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/token/ERC20/utils/SafeERC20.sol";
-import {IWBNB} from "../interfaces/IWBNB.sol";
 import {AssSwapExecutor} from "../adapters/AssSwapExecutor.sol";
 
 /// @title AssEngine — revenue processing and basket budgeting for $ASS
-/// @notice Receives BNB from AssVault, wraps to WBNB, splits by basket weights
-/// into per-asset budgets, and executes keeper-priced buys through the
+/// @notice Receives QQQB (quote token) from AssVault, splits it by basket
+/// weights into per-asset budgets, and executes keeper-priced buys through the
 /// SwapExecutor with bStocks landing directly in the Distributor. A failed or
 /// skipped asset's budget simply persists — carry-forward is the default state,
 /// not an exception path. All accounting in raw units.
+/// @dev Inflow and budgets share one ERC20 balance, so processing takes only
+/// the unearmarked portion: balance minus outstanding budgets. No native BNB
+/// path exists anywhere (no receive/fallback).
 contract AssEngine is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
-    IWBNB public immutable wbnb;
+    IERC20 public immutable quote; // QQQB — Invesco QQQ Trust bStock
     AssSwapExecutor public executor;
     address public distributor;
     mapping(address => bool) public keeper;
@@ -26,17 +28,17 @@ contract AssEngine is Ownable, ReentrancyGuard {
         bool registered;
         bool enabled;        // disabled = no NEW budget; existing budget stays spendable/reassignable
         uint16 weightBps;    // zero-weight preferred over removal (stored requirement)
-        uint128 maxSpendPerBuy; // per-tx WBNB cap — bounds keeper blast radius + forces batching
+        uint128 maxSpendPerBuy; // per-tx quote cap — bounds keeper blast radius + forces batching
     }
 
     address[] public allAssets;
     mapping(address => Asset) public assets;
-    mapping(address => uint256) public budget; // WBNB earmarked per asset (carry-forward lives here)
+    mapping(address => uint256) public budget; // quote earmarked per asset (carry-forward lives here)
     uint16 public totalWeightBps;
 
-    uint256 public minProcessAmount = 0.05 ether; // don't churn dust cycles
-    uint256 public cumulativeBnbProcessed;
-    mapping(address => uint256) public cumulativeSpent;  // WBNB per asset
+    uint256 public minProcessAmount = 0.05 ether; // QQQB raw units — don't churn dust cycles
+    uint256 public cumulativeQuoteProcessed;      // Σ allocated to budgets (never double-counts)
+    mapping(address => uint256) public cumulativeSpent;  // quote per asset
     mapping(address => uint256) public cumulativeBought; // bStock raw units per asset
 
     event KeeperSet(address indexed k, bool on);
@@ -44,8 +46,8 @@ contract AssEngine is Ownable, ReentrancyGuard {
     event DistributorSet(address indexed distributor);
     event AssetAdded(address indexed asset, uint16 weightBps, uint128 maxSpendPerBuy);
     event AssetConfigured(address indexed asset, bool enabled, uint16 weightBps, uint128 maxSpendPerBuy);
-    event RevenueProcessed(uint256 bnbWrapped, uint256 allocated, uint256 unallocatedCarry);
-    event Bought(address indexed asset, address indexed router, uint256 wbnbSpent, uint256 received);
+    event RevenueProcessed(uint256 quoteIn, uint256 allocated, uint256 unallocatedCarry);
+    event Bought(address indexed asset, address indexed router, uint256 quoteSpent, uint256 received);
     event BuyFailed(address indexed asset, address indexed router, uint256 attemptedSpend, bytes reason);
     event BudgetReassigned(address indexed from, address indexed to, uint256 amount);
 
@@ -53,6 +55,7 @@ contract AssEngine is Ownable, ReentrancyGuard {
     error UnknownAsset();
     error AssetRegistered();
     error AssetDisabled();
+    error AssetIsQuote();
     error WeightsTooHigh();
     error NothingToProcess();
     error OverBudget();
@@ -64,11 +67,10 @@ contract AssEngine is Ownable, ReentrancyGuard {
         _;
     }
 
-    constructor(address wbnb_, address owner_) Ownable(owner_) {
-        wbnb = IWBNB(wbnb_);
+    constructor(address quote_, address owner_) Ownable(owner_) {
+        require(quote_ != address(0) && quote_.code.length > 0, "bad quote");
+        quote = IERC20(quote_);
     }
-
-    receive() external payable {} // BNB arrives from AssVault.release()
 
     // ---------------------------------------------------------------- admin
     function setKeeper(address k, bool on) external onlyOwner { keeper[k] = on; emit KeeperSet(k, on); }
@@ -78,6 +80,7 @@ contract AssEngine is Ownable, ReentrancyGuard {
 
     function addAsset(address asset, uint16 weightBps, uint128 maxSpendPerBuy) external onlyOwner {
         if (assets[asset].registered) revert AssetRegistered();
+        if (asset == address(quote)) revert AssetIsQuote(); // basket asset can never be the quote
         require(asset != address(0) && asset.code.length > 0, "bad asset");
         IERC20(asset).balanceOf(address(this)); // must quack like ERC-20
         if (totalWeightBps + weightBps > 10_000) revert WeightsTooHigh();
@@ -116,25 +119,24 @@ contract AssEngine is Ownable, ReentrancyGuard {
     }
 
     // ---------------------------------------------------------------- cycle
-    /// @notice Wrap accumulated BNB and split by weights into per-asset budgets.
-    /// weightBps is absolute (sum <= 10000); any shortfall from rounding or
-    /// sub-10000 weights stays as unallocated WBNB and rolls into the next call.
+    /// @notice Split newly-arrived quote (balance minus outstanding budgets) by
+    /// weights into per-asset budgets. weightBps is absolute (sum <= 10000);
+    /// rounding dust stays unearmarked and rolls into the next call.
     function processRevenue() external onlyKeeper nonReentrant {
-        uint256 bal = address(this).balance;
-        if (bal < minProcessAmount) revert NothingToProcess();
-        wbnb.deposit{value: bal}();
-        cumulativeBnbProcessed += bal;
+        uint256 unprocessed = _unallocated();
+        if (unprocessed < minProcessAmount) revert NothingToProcess();
 
         uint256 allocated;
         for (uint256 i; i < allAssets.length; ++i) {
             Asset memory a = assets[allAssets[i]];
             if (!a.enabled || a.weightBps == 0) continue;
-            uint256 slice = (bal * a.weightBps) / 10_000;
+            uint256 slice = (unprocessed * a.weightBps) / 10_000;
             if (slice == 0) continue;
             budget[allAssets[i]] += slice;
             allocated += slice;
         }
-        emit RevenueProcessed(bal, allocated, bal - allocated);
+        cumulativeQuoteProcessed += allocated; // only what entered budgets — double-count impossible
+        emit RevenueProcessed(unprocessed, allocated, unprocessed - allocated);
     }
 
     /// @notice Execute one keeper-priced buy. Failure is isolated: the external
@@ -179,21 +181,26 @@ contract AssEngine is Ownable, ReentrancyGuard {
         uint256 deadline
     ) external returns (uint256 spent, uint256 received) {
         if (msg.sender != address(this)) revert NotSelf();
-        IERC20(address(wbnb)).safeTransfer(address(executor), spend);
+        quote.safeTransfer(address(executor), spend);
         (spent, received) = executor.execute(
             router, routerCalldata, spend, asset, minOut, distributor, deadline
         );
         // executor returns leftovers to this contract; anything unspent simply
-        // remains in our WBNB balance and stays counted inside budget[asset]
+        // remains in our quote balance and stays counted inside budget[asset]
         // because we only decrement by `spent`.
     }
 
     // ---------------------------------------------------------------- views
     function assetsCount() external view returns (uint256) { return allAssets.length; }
-    function unallocatedWbnb() public view returns (uint256) {
+
+    /// @notice Quote held that is not earmarked to any asset budget —
+    /// i.e. revenue awaiting processRevenue, plus rounding dust.
+    function unallocatedQuote() external view returns (uint256) { return _unallocated(); }
+
+    function _unallocated() internal view returns (uint256) {
         uint256 earmarked;
         for (uint256 i; i < allAssets.length; ++i) earmarked += budget[allAssets[i]];
-        uint256 bal = wbnb.balanceOf(address(this));
+        uint256 bal = quote.balanceOf(address(this));
         return bal > earmarked ? bal - earmarked : 0;
     }
 }

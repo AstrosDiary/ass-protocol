@@ -15,16 +15,16 @@ const STATE = new URL('./indexer-state.json', import.meta.url).pathname
 const SHARE_TOPIC = '0x2a9333f5f64b9c9d299faa0d6699b5db8d59d08388fea8ae78ca2303836a10f8'
 
 const client = createPublicClient({ chain: bsc, transport: http(RPC) })
-const evBought = parseAbiItem('event Bought(address indexed asset, address indexed router, uint256 wbnbSpent, uint256 received)')
-const evProcessed = parseAbiItem('event RevenueProcessed(uint256 bnbWrapped, uint256 allocated, uint256 unallocatedCarry)')
+const evBought = parseAbiItem('event Bought(address indexed asset, address indexed router, uint256 quoteSpent, uint256 received)')
+const evProcessed = parseAbiItem('event RevenueProcessed(uint256 quoteIn, uint256 allocated, uint256 unallocatedCarry)')
 const evPaid = parseAbiItem('event Paid(uint64 indexed id, address indexed asset, address indexed holder, uint256 amount)')
 
 // ---- state (JSON-serialisable: bigints as strings) ----
 let S = {
   lastBlock: (START_BLOCK - 1n).toString(),
   shares: {},              // holder -> share (string)
-  feed: [],                // [{ts, block, tx, action, asset, wbnbSpent, received}] newest first, cap 500
-  history: {},             // dayKey -> cumulative bnb processed (string wei) at end of day
+  feed: [],                // [{ts, block, tx, action, asset, quoteSpent, received}] newest first, cap 500
+  history: {},             // dayKey -> cumulative quote processed (string wei) at end of day
   cumProcessed: '0',
   paid: {},                // holder -> [{ts, block, tx, asset, amount}] newest first, cap 200 each
 }
@@ -67,12 +67,12 @@ async function ingest() {
       S.feed.unshift({
         ts: await tsOf(l.blockNumber), block: Number(l.blockNumber), tx: l.transactionHash,
         action: 'BUY', asset: l.args.asset.toLowerCase(),
-        wbnbSpent: l.args.wbnbSpent.toString(), received: l.args.received.toString(),
+        quoteSpent: l.args.quoteSpent.toString(), received: l.args.received.toString(),
       })
     }
     const proc = await getLogsRetry({ address: ENGINE, event: evProcessed, fromBlock: from, toBlock: to })
     for (const l of proc) {
-      const cum = BigInt(S.cumProcessed) + l.args.bnbWrapped
+      const cum = BigInt(S.cumProcessed) + l.args.allocated
       S.cumProcessed = cum.toString()
       S.history[dayKey(await tsOf(l.blockNumber))] = cum.toString()
     }

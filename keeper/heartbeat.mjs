@@ -1,5 +1,6 @@
 // One keeper heartbeat: dispatch -> release -> process -> buys -> cycle.
 // Every step independently guarded; a failed step logs and the pass continues.
+// All revenue amounts denominated in QQQB (quote token) raw units.
 import { createPublicClient, http, parseAbi } from 'viem'
 import { bsc } from 'viem/chains'
 import { execFileSync } from 'node:child_process'
@@ -8,8 +9,8 @@ import { existsSync } from 'node:fs'
 const env = (k) => { const v = process.env[k]; if (!v) throw new Error(`env ${k} missing`) ; return v }
 const RPC = env('BSC_RPC_URL'), VAULT = env('VAULT'), ENGINE = env('ENGINE'), DIST = env('DIST')
 const TAXPROC = process.env.TAXPROC ?? '0x34a643c09d086DA1382d8C39b2Aea0EA0EcA9D6F'
-const RELEASE_MIN = BigInt(process.env.RELEASE_MIN ?? '5000000000000000')  // 0.005 BNB
-const BUY_MIN = BigInt(process.env.BUY_MIN ?? '2000000000000000')          // 0.002 WBNB
+const RELEASE_MIN = BigInt(process.env.RELEASE_MIN ?? '20000000000000000') // 0.02 QQQB (~$11)
+const BUY_MIN = BigInt(process.env.BUY_MIN ?? '5000000000000000')          // 0.005 QQQB (~$3)
 const POT_MIN = BigInt(process.env.POT_MIN ?? '1000000000000')             // 1e12 raw — ignore rounding dust
 const STOCKS = { BABAB: '0x4eF9d3062c7F6ebA4AAE4990c5036598C6eff4ec',
                  TSMB:  '0xAB78b89B5bb00236Be0B4B20704cBfa04EfC711c',
@@ -17,7 +18,8 @@ const STOCKS = { BABAB: '0x4eF9d3062c7F6ebA4AAE4990c5036598C6eff4ec',
 
 const client = createPublicClient({ chain: bsc, transport: http(RPC) })
 const abi = parseAbi([
-  'function pendingBnb() view returns (uint256)',
+  'function pendingQuote() view returns (uint256)',
+  'function unallocatedQuote() view returns (uint256)',
   'function minProcessAmount() view returns (uint256)',
   'function budget(address) view returns (uint256)',
   'function reservedForAccrued(address) view returns (uint256)',
@@ -34,16 +36,16 @@ const step = (name, fn) => { try { return fn() } catch (e) { log(`${name} FAILED
 // 1. flush Flap's tax processor (permissionless; reverts harmlessly when empty)
 step('dispatch', () => { send(TAXPROC, '800000', 'dispatch()'); log('dispatch ok') })
 
-// 2. release vault revenue when above floor
-const pending = await client.readContract({ address: VAULT, abi, functionName: 'pendingBnb' })
-log(`vault pending ${pending}`)
+// 2. release vault revenue when above floor (QQQB units)
+const pending = await client.readContract({ address: VAULT, abi, functionName: 'pendingQuote' })
+log(`vault pending ${pending} QQQB-wei`)
 if (pending >= RELEASE_MIN) step('release', () => { send(VAULT, '300000', 'release()'); log('released') })
 
-// 3. wrap + split when engine holds enough BNB
-const engBal = await client.getBalance({ address: ENGINE })
+// 3. split when engine holds enough unearmarked quote (no wrap step anymore)
+const unalloc = await client.readContract({ address: ENGINE, abi, functionName: 'unallocatedQuote' })
 const minProc = await client.readContract({ address: ENGINE, abi, functionName: 'minProcessAmount' })
-log(`engine bnb ${engBal} (floor ${minProc})`)
-if (engBal >= minProc) step('process', () => { send(ENGINE, '600000', 'processRevenue()'); log('processed') })
+log(`engine unallocated ${unalloc} (floor ${minProc})`)
+if (unalloc >= minProc) step('process', () => { send(ENGINE, '600000', 'processRevenue()'); log('processed') })
 
 // 4. buys: any budget above dust threshold gets a quote+execute (child handles carry-forward)
 for (const [sym, addr] of Object.entries(STOCKS)) {
