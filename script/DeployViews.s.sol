@@ -10,10 +10,10 @@ import {AssViews} from "../src/views/AssViews.sol";
 /// FILL all four addresses from the current deployment — the script reverts
 /// until every one is set, so a stale run cannot half-fire.
 contract DeployViews is Script {
-    address constant VAULT = address(0);        // <- FILL: vault proxy (VaultCreated event / token launch)
-    address constant ENGINE = address(0);       // <- FILL: DeployCore output
-    address constant DISTRIBUTOR = address(0);  // <- FILL: DeployCore output
-    address constant TRACKER = address(0);      // <- FILL: token.dividendContract()
+    address constant VAULT = address(0xA823c0B59fC26CE6F5e238dd8a24ae935042f3b2);        // <- FILL: vault proxy (VaultCreated event / token launch)
+    address constant ENGINE = address(0x96bcC93d57e39BA5509f81eA89c8efd4ce70d4e6);       // <- FILL: DeployCore output
+    address constant DISTRIBUTOR = address(0x05cfBc7E590c95F272Db8796D7d8c3cDC79920A2);  // <- FILL: DeployCore output
+    address constant TRACKER = address(0xae11E7f561d5452BE6a390f122abeB5AB50551Fc);      // <- FILL: token.dividendContract()
 
     function run() external {
         require(VAULT != address(0), "FILL: VAULT");
