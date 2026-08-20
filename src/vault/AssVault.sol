@@ -7,6 +7,7 @@ import {IERC20} from "@openzeppelin/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/token/ERC20/utils/SafeERC20.sol";
 import {VaultBaseV2} from "../flap/VaultBaseV2.sol";
 import {VaultUISchema, VaultMethodSchema, FieldDescriptor, ApproveAction} from "../flap/IVaultSchemasV1.sol";
+import {VaultBaseV3} from "../flap/VaultBaseV3.sol";
 
 /// @title AssVault — Flap tax vault for Asian Stock Strategy ($ASS)
 /// @notice Thin, spec-compliant revenue vault. Accumulates QQQB (Invesco QQQ
@@ -15,9 +16,9 @@ import {VaultUISchema, VaultMethodSchema, FieldDescriptor, ApproveAction} from "
 /// All business logic lives outside this contract to minimise the audited,
 /// beacon-upgradeable surface. Deployed behind a BeaconProxy; beacon upgrade
 /// authority is transferred to the Flap Guardian per audit requirements.
-/// @dev The vault holds ONLY the quote token. It has no receive/fallback:
-/// native BNB transfers revert by construction.
-contract AssVault is Initializable, AccessControlUpgradeable, VaultBaseV2 {
+/// @dev The vault holds ONLY the quote token. 
+/// receive() is the V3 ping target; native value reverts.
+contract AssVault is Initializable, AccessControlUpgradeable, VaultBaseV3 {
     using SafeERC20 for IERC20;
 
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
@@ -31,10 +32,16 @@ contract AssVault is Initializable, AccessControlUpgradeable, VaultBaseV2 {
 
     uint256 public totalReleased; // lifetime QQQB released to the engine
 
+    /// @dev V3 balance-delta baseline: recognized-and-not-yet-spent revenue.
+    uint256 public accountedQuote;
+
+    event RevenueRecognized(uint256 amount);
+
     event EngineSet(address indexed engine);
     event Released(address indexed engine, uint256 amount);
 
     error CannotRevokeGuardianRole();
+    error NativeNotAccepted();
 
     constructor() {
         _disableInitializers(); // implementation is inert; proxies initialize
@@ -54,6 +61,32 @@ contract AssVault is Initializable, AccessControlUpgradeable, VaultBaseV2 {
         // irrevocably by anyone but itself — see revokeRole override.
         _grantRole(DEFAULT_ADMIN_ROLE, guardian);
         _grantRole(OPERATOR_ROLE, guardian);
+    }
+
+    /// @notice V3 spec: the revenue currency (QQQB).
+    function vaultQuoteToken() public pure override returns (address) {
+        return address(QUOTE);
+    }
+
+    /// @notice V3 ping target. The TaxProcessor transfers QQQB first, then
+    /// wakes us with a zero-value call. Zero-delta wakes are silent no-ops.
+    /// Native value is refused — this vault holds only QQQB.
+    receive() external payable {
+        if (msg.value > 0) revert NativeNotAccepted();
+        _syncRevenue();
+    }
+
+    /// @notice Permissionless recognition entry point (spec-recommended).
+    function sync() external {
+        _syncRevenue();
+    }
+
+    function _syncRevenue() internal {
+        uint256 bal = QUOTE.balanceOf(address(this));
+        if (bal <= accountedQuote) return;          // idempotent no-op (ping law 4)
+        uint256 newRevenue = bal - accountedQuote;
+        accountedQuote = bal;                        // advance baseline
+        emit RevenueRecognized(newRevenue);          // lightweight only (ping law 3)
     }
 
     // ------------------------------------------------------------- revenue
@@ -79,9 +112,11 @@ contract AssVault is Initializable, AccessControlUpgradeable, VaultBaseV2 {
     function release() external onlyRole(OPERATOR_ROLE) {
         address engine_ = engine;
         require(engine_ != address(0), "ASS: engine unset");
+        _syncRevenue();                              // recognize before acting (rule 5)
         uint256 amount = QUOTE.balanceOf(address(this));
         require(amount > 0, "ASS: nothing to release");
         totalReleased += amount;
+        accountedQuote = 0;                          // rule 3: outflow decrements baseline (full sweep -> 0)
         QUOTE.safeTransfer(engine_, amount);
         emit Released(engine_, amount);
     }
@@ -122,7 +157,7 @@ contract AssVault is Initializable, AccessControlUpgradeable, VaultBaseV2 {
         schema.description =
             "Accumulates $ASS tax revenue (QQQB) and routes it to the ASS Engine, which buys "
             "Asian bStocks (BABAB, TSMB, SKHYB) and distributes them pro-rata to eligible holders.";
-        schema.methods = new VaultMethodSchema[](4);
+        schema.methods = new VaultMethodSchema[](5);
 
         schema.methods[0].name = "pendingQuote";
         schema.methods[0].description = "QQQB currently held, awaiting release for stock purchases.";
@@ -144,6 +179,11 @@ contract AssVault is Initializable, AccessControlUpgradeable, VaultBaseV2 {
             "Releases accumulated QQQB to the ASS Engine for stock purchases. Operator only.";
         schema.methods[3].approvals = new ApproveAction[](0);
         schema.methods[3].isWriteMethod = true;
+
+        schema.methods[4].name = "sync";
+        schema.methods[4].description = "Recognize newly-arrived QQQB revenue (permissionless).";
+        schema.methods[4].approvals = new ApproveAction[](0);
+        schema.methods[4].isWriteMethod = true;
     }
 
     // ------------------------------------------------------------- internal

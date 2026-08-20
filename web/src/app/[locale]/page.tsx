@@ -69,7 +69,7 @@ export default function Home() {
               { label: t("statPrice"), value: usd(markets?.ass.priceUsd ?? null, 6) },
               { label: t("statVolume"), value: usd(markets?.ass.volume24h ?? null, 0) },
               { label: t("statAcquired"), value: accruedUsd == null ? "—" : usd(accruedUsd) },
-              { label: t("statProcessed"), value: stats ? fmtUnits(stats.cumulativeBnbProcessed) : "—" },
+              { label: t("statProcessed"), value: stats ? fmtUnits(stats.cumulativeQuoteProcessed) : "—" },
             ].map((s) => (
               <div key={s.label} className="bg-midnight px-4 py-3">
                 <div className="text-[11px] tracking-widest text-muted-grey">{s.label}</div>

@@ -17,6 +17,9 @@ export const ADDR = {
 export const RPC = process.env.NEXT_PUBLIC_BSC_RPC ?? "https://bsc-dataseed.bnbchain.org";
 export const INDEXER = process.env.NEXT_PUBLIC_INDEXER_URL || null;
 
+/** quote token: QQQB (Invesco QQQ Trust bStock) — the pairing + tax currency */
+export const QQQB = "0x205812CdBed920aFf76C6580abD681a46D11efc7" as Address;
+
 /** the three-asset basket — final, per project ruling */
 export const STOCKS = [
   { symbol: "BABAB", name: "Alibaba Group", region: "China",
@@ -29,8 +32,8 @@ export const STOCKS = [
 
 export const VIEWS_ABI = parseAbi([
   "function VERSION() view returns (string)",
-  "struct ProtocolStats { uint256 vaultTotalReceivedBnb; uint256 vaultTotalReleasedBnb; uint256 vaultPendingBnb; uint256 engineUnwrappedBnb; uint256 engineUnallocatedWbnb; uint256 cumulativeBnbProcessed; uint256 trackerTotalShares; uint256 trackerMinimumShare; uint8 distributorPhase; uint64 currentCycleId; uint256 assetCount; }",
-  "struct AssetCard { address asset; bool enabledEngine; bool enabledDistributor; uint16 weightBps; uint128 maxSpendPerBuy; uint256 budgetWbnb; uint256 cumulativeSpentWbnb; uint256 cumulativeBoughtRaw; uint256 cumulativeDistributedRaw; uint256 distributorBalanceRaw; uint256 reservedForAccruedRaw; uint256 minPayoutRaw; }",
+  "struct ProtocolStats { uint256 vaultTotalReceivedQuote; uint256 vaultTotalReleasedQuote; uint256 vaultPendingQuote; uint256 engineUnallocatedQuote; uint256 cumulativeQuoteProcessed; uint256 trackerTotalShares; uint256 trackerMinimumShare; uint8 distributorPhase; uint64 currentCycleId; uint256 assetCount; }",
+  "struct AssetCard { address asset; bool enabledEngine; bool enabledDistributor; uint16 weightBps; uint128 maxSpendPerBuy; uint256 budgetQuote; uint256 cumulativeSpentQuote; uint256 cumulativeBoughtRaw; uint256 cumulativeDistributedRaw; uint256 distributorBalanceRaw; uint256 reservedForAccruedRaw; uint256 minPayoutRaw; }",
   "struct HolderCard { uint256 trackerShare; bool excluded; uint256[] accruedRaw; }",
   "function protocolStats() view returns (ProtocolStats)",
   "function assetCards() view returns (AssetCard[])",
@@ -68,5 +71,5 @@ export function fmtUnits(raw: bigint, decimals = 18, maxSig = 4): string {
   return n.toPrecision(maxSig).replace(/\.?0+$/, "");
 }
 
-export const fmtBnb = (wei: bigint) => `${fmtUnits(wei, 18)} BNB`;
+export const fmtQuote = (raw: bigint) => `${fmtUnits(raw, 18)} QQQB`;
 export const shortAddr = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;

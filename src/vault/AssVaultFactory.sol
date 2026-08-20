@@ -18,10 +18,6 @@ contract AssVaultFactory is VaultFactoryBaseV2 {
 
     /// @dev the exact launch profile this factory permits
     address public constant REQUIRED_QUOTE = 0x205812CdBed920aFf76C6580abD681a46D11efc7; // QQQB
-    uint16 public constant REQUIRED_BUY_TAX = 300;   // 3%
-    uint16 public constant REQUIRED_SELL_TAX = 300;  // 3%
-    uint256 public constant REQUIRED_MIN_SHARE = 10_000e18; // 10,000 $ASS
-    uint16 public constant REQUIRED_VAULT_BPS = 10_000;     // 100% of tax remainder -> vault
 
     event VaultCreated(address indexed vault, address indexed taxToken, address indexed creator);
 
@@ -30,11 +26,21 @@ contract AssVaultFactory is VaultFactoryBaseV2 {
         beacon = beacon_;
     }
 
+    /// @dev v2.3: the gate VaultPortal checks before allowing ERC20-quote launches.
+    function factorySpecVersion() public pure override returns (string memory) {
+        return "v2.3";
+    }
+
     /// @inheritdoc VaultFactoryBaseV2
     function vaultDataSchema() public pure override returns (VaultDataSchema memory schema) {
         schema.description =
-            "Asian Stock Strategy vault: accumulates tax QQQB and converts it into a basket of "
-            "Asian bStocks distributed to holders. No configurable parameters - vaultData is ignored.";
+            "Deploys a multi-reward-token tax vault: tax revenue (QQQB) accumulates here and is "
+            "converted by an engine into a basket of reward tokens distributed to holders - built "
+            "because Flap natively supports only a single dividend token per launch, while this "
+            "design distributes several (e.g. Asian Stock Strategy pays holders in 3 tokenized "
+            "equities: BABAB, TSMB, SKHYB). NOTE: the vault arrives unwired - after launch the "
+            "creator must deploy and connect their own engine + distributor (vault.setEngine), "
+            "then register their chosen reward tokens. vaultData is ignored.";
         schema.fields = new FieldDescriptor[](0);
         schema.isArray = false;
     }
@@ -70,24 +76,19 @@ contract AssVaultFactory is VaultFactoryBaseV2 {
     {
         if (d.tokenVersion != IPortalTypes.TokenVersion.TOKEN_TAXED_V3) return (false, "tokenVersion must be TOKEN_TAXED_V3");
         if (d.quoteToken != REQUIRED_QUOTE) return (false, "quote token must be QQQB");
-        if (d.buyTaxRate != REQUIRED_BUY_TAX) return (false, "buy tax must be 3% (300 bps)");
-        if (d.sellTaxRate != REQUIRED_SELL_TAX) return (false, "sell tax must be 3% (300 bps)");
-        if (d.vaultBps != REQUIRED_VAULT_BPS) return (false, "vault must receive 100% of tax remainder");
-        if (d.deflationBps != 0) return (false, "deflation must be 0");
-        if (d.dividendBps != 0) return (false, "dividendBps must be 0 (tracker-only mode)");
-        if (d.lpBps != 0) return (false, "lpBps must be 0");
-        if (d.minimumShareBalance != REQUIRED_MIN_SHARE) return (false, "minimumShareBalance must be 10,000 ASS");
+        if (d.buyTaxRate + d.sellTaxRate == 0) return (false, "a non-zero trade tax is required (the vault's only revenue source)");
+        if (d.vaultBps == 0) return (false, "vaultBps must be > 0 (some tax share must reach the vault)");
+        if (d.dividendBps != 0) return (false, "dividendBps must be 0 (tracker-only mode; the distributor pushes rewards manually)");
         return (true, "");
     }
 
     /// @dev informational mirror of _validateBeforeLaunch for the launch UI
     function tokenCreationPolicies() public pure override returns (FactoryPolicy[] memory p) {
-        p = new FactoryPolicy[](6);
+        p = new FactoryPolicy[](5);
         p[0] = FactoryPolicy("quoteToken", "eq", abi.encode(REQUIRED_QUOTE), "Quote token must be QQQB (Invesco QQQ Trust bStock).");
-        p[1] = FactoryPolicy("buyTaxRate", "eq", abi.encode(uint256(REQUIRED_BUY_TAX)), "Buy tax must be 3%.");
-        p[2] = FactoryPolicy("sellTaxRate", "eq", abi.encode(uint256(REQUIRED_SELL_TAX)), "Sell tax must be 3%.");
-        p[3] = FactoryPolicy("dividendBps", "eq", abi.encode(uint256(0)), "Dividends run in tracker-only mode (bps 0).");
-        p[4] = FactoryPolicy("mktBps", "eq", abi.encode(uint256(REQUIRED_VAULT_BPS)), "100% of tax remainder routes to the vault.");
-        p[5] = FactoryPolicy("minimumShareBalance", "eq", abi.encode(REQUIRED_MIN_SHARE), "Minimum eligible balance is 10,000 ASS.");
+        p[1] = FactoryPolicy("buyTaxRate", "gte", abi.encode(uint256(0)), "Buy + sell tax must be non-zero in total - tax is the vault's only revenue source.");
+        p[2] = FactoryPolicy("sellTaxRate", "gte", abi.encode(uint256(0)), "See buyTaxRate - at least one of the two taxes must be non-zero.");
+        p[3] = FactoryPolicy("vaultBps", "gt", abi.encode(uint256(0)), "Some share of tax must route to the vault.");
+        p[4] = FactoryPolicy("dividendBps", "eq", abi.encode(uint256(0)), "Dividends run in tracker-only mode; the vault's distributor pushes rewards each cycle.");
     }
 }

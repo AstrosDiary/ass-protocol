@@ -4,7 +4,7 @@
     "tagline": "亚洲 bStock 协议。",
     "sub": "持有 <s>$ASS</s>，亚洲 <s>bStocks</s> 自动累积到你的钱包。被动敞口，真实亚洲市场。Real ASS。",
     "cta": "买入 $ASS", "cta2": "查看亚洲交易台",
-    "statPrice": "$ASS 价格", "statVolume": "24小时交易量", "statAcquired": "已购入 bStocks", "statProcessed": "已处理 BNB"
+    "statPrice": "$ASS 价格", "statVolume": "24小时交易量", "statAcquired": "已购入 bStocks", "statProcessed": "已处理 QQQB"
   },
   "home": {
     "howTitle": "运作方式",
@@ -41,8 +41,8 @@
   },
   "desk": {
     "title": "亚洲交易台",
-    "kpiAccrued": "已累积 bSTOCKS", "kpiProcessed": "已处理 BNB", "kpiHolders": "持有者", "kpiVolume": "$ASS 24小时交易量",
-    "chartTitle": "BNB 处理量走势", "chartX": "日期（UTC）", "chartY": "累计 BNB", "chartEmpty": "等待索引器数据",
+    "kpiAccrued": "已累积 bSTOCKS", "kpiProcessed": "已处理 QQQB", "kpiHolders": "持有者", "kpiVolume": "$ASS 24小时交易量",
+    "chartTitle": "QQQB 处理量走势", "chartX": "日期（UTC）", "chartY": "累计 QQQB", "chartEmpty": "等待索引器数据",
     "allocTitle": "篮子配置",
     "strategistQuote": "我们不预测市场。我们构建优势。",
     "basketTitle": "篮子",

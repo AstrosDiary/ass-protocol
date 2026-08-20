@@ -100,7 +100,7 @@ export function useExecutionFeed() {
   return useQuery({
     queryKey: ["idx-feed"],
     queryFn: async () => (await fetch(`${INDEXER}/feed`)).json() as Promise<{
-      ts: number; block: number; tx: string; action: string; asset: string; wbnbSpent: string; received: string;
+      ts: number; block: number; tx: string; action: string; asset: string; quoteSpent: string; received: string;
     }[]>,
     enabled: !!INDEXER, refetchInterval: 30_000,
   });

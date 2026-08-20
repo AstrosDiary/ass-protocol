@@ -4,7 +4,7 @@
     "tagline": "THE ASIAN bSTOCK PROTOCOL.",
     "sub": "Hold <s>$ASS</s> and automatically accrue Asian <s>bStocks</s> in your wallet. Passive Exposure. Real Asian Markets. Real ASS.",
     "cta": "BUY $ASS", "cta2": "VIEW ASIA DESK",
-    "statPrice": "$ASS PRICE", "statVolume": "24H VOLUME", "statAcquired": "bSTOCKS ACQUIRED", "statProcessed": "BNB PROCESSED"
+    "statPrice": "$ASS PRICE", "statVolume": "24H VOLUME", "statAcquired": "bSTOCKS ACQUIRED", "statProcessed": "QQQB PROCESSED"
   },
   "home": {
     "howTitle": "HOW IT WORKS",
@@ -29,8 +29,8 @@
     "stat3Label": "ASIAN bSTOCKS", "stat3Src": "AUTO-ACCRUED BY $ASS",
     "engineHeadline": "EVERY TRADE FUNDS ASIA.",
     "n1Label": "TRADE", "n1Detail": "Every buy and sell feeds the strategy.",
-    "n2Label": "VAULT", "n2Detail": "Trading tax accumulates as BNB.",
-    "n3Label": "BUY ASIA", "n3Detail": "BNB becomes Alibaba, TSMC and SK Hynix.",
+    "n2Label": "VAULT", "n2Detail": "Trading tax accumulates.",
+    "n3Label": "BUY ASIA", "n3Detail": "Tax becomes Alibaba, TSMC and SK Hynix.",
     "n4Label": "ACCRUE", "n4Value": "WALLET", "n4Detail": "Eligible holders update automatically.",
     "engineFooter": "EVERY CYCLE BUYS ASIA.",
     "p1Detail": "Launched on BNB Chain via flap.sh — liquidity locked by the launchpad.",
@@ -41,8 +41,8 @@
   },
   "desk": {
     "title": "ASIA DESK",
-    "kpiAccrued": "bSTOCKS ACCRUED", "kpiProcessed": "BNB PROCESSED", "kpiHolders": "HOLDERS", "kpiVolume": "$ASS 24H VOLUME",
-    "chartTitle": "BNB PROCESSED OVER TIME", "chartX": "DATE (UTC)", "chartY": "CUMULATIVE BNB", "chartEmpty": "AWAITING INDEXER DATA",
+    "kpiAccrued": "bSTOCKS ACCRUED", "kpiProcessed": "QQQB PROCESSED", "kpiHolders": "HOLDERS", "kpiVolume": "$ASS 24H VOLUME",
+    "chartTitle": "QQQB PROCESSED OVER TIME", "chartX": "DATE (UTC)", "chartY": "CUMULATIVE QQQB", "chartEmpty": "AWAITING INDEXER DATA",
     "allocTitle": "BASKET ALLOCATION",
     "strategistQuote": "We don't predict markets. We structure advantage.",
     "basketTitle": "BASKET",
@@ -66,7 +66,7 @@
     "nav_overview": "Overview", "nav_how": "How $ASS Works", "nav_accrual": "Auto Accrual", "nav_basket": "The Basket",
     "nav_accounting": "Accrual Accounting", "nav_contracts": "Contracts", "nav_security": "Security", "nav_risks": "Risks", "nav_faq": "FAQ",
     "overviewBody": "$ASS is an automated protocol on BNB Chain that converts trading activity into a basket of tokenized Asian equities. By holding $ASS, Asian bStocks are automatically accrued in your wallet — no action needed.",
-    "howBody": "$ASS launched via flap.sh as a Tax Token V3 paired with BNB, with a fixed 3% buy and 3% sell tax routed to a custom on-chain vault. On a recurring cycle, the protocol converts accumulated BNB into <b>BABAB, TSMB and SKHYB</b> via PancakeSwap and distributes the purchased stocks pro-rata to eligible holders.",
+    "howBody": "$ASS launched via flap.sh as a Tax Token V3 paired with QQQB, with a fixed 3% buy and 3% sell tax routed to a custom on-chain vault. On a recurring cycle, the protocol converts accumulated QQQB into <b>BABAB, TSMB and SKHYB</b> via PancakeSwap and distributes the purchased stocks pro-rata to eligible holders.",
     "accrualBody1": "There is no staking, no claiming and no manual reward action anywhere in the protocol. Hold at least",
     "accrualBody2": "and every distribution cycle delivers your proportional share of each purchased bStock directly to your wallet. Eligibility and share accounting are maintained by the on-chain dividend tracker on every single transfer.",
     "regionBABAB": "CHINA", "regionTSMB": "TAIWAN", "regionSKHYB": "SOUTH KOREA",

@@ -142,7 +142,6 @@ contract VaultFactoryTest is Test {
         d.dividendBps = 0;
         d.lpBps = 0;
         d.dividendToken = address(0);
-        d.minimumShareBalance = 10_000e18;
     }
 
     function test_OnBeforeLaunch_AcceptsCanonicalProfile() public view {
@@ -150,22 +149,30 @@ contract VaultFactoryTest is Test {
         assertTrue(ok, reason);
     }
 
+    /// relaxation proof: a third-party profile (different taxes, split bps,
+    /// no min share) is launchable through this factory
+    function test_OnBeforeLaunch_AcceptsRelaxedThirdPartyProfile() public view {
+        IVaultFactoryValidationV2.LaunchValidationDataV1 memory d = _validPayload();
+        d.buyTaxRate = 500;
+        d.sellTaxRate = 100;
+        d.vaultBps = 6_000;          // splits allowed
+        d.lpBps = 4_000;
+        d.minimumShareBalance = 0;   // UI-encoded launches pass
+        (bool ok, string memory reason) = factory.onBeforeLaunch(abi.encode(d));
+        assertTrue(ok, reason);
+    }
+
     function test_OnBeforeLaunch_RejectsEveryDeviation() public {
         IVaultFactoryValidationV2.LaunchValidationDataV1 memory d;
+        bool ok;
 
-        d = _validPayload(); d.buyTaxRate = 500;
-        (bool ok,) = factory.onBeforeLaunch(abi.encode(d)); assertFalse(ok);
-
-        d = _validPayload(); d.sellTaxRate = 0;
+        d = _validPayload(); d.buyTaxRate = 0; d.sellTaxRate = 0; // zero total tax = no revenue, ever
         (ok,) = factory.onBeforeLaunch(abi.encode(d)); assertFalse(ok);
 
-        d = _validPayload(); d.dividendBps = 100;      // not tracker-only
+        d = _validPayload(); d.vaultBps = 0;            // nothing routed to the vault
         (ok,) = factory.onBeforeLaunch(abi.encode(d)); assertFalse(ok);
 
-        d = _validPayload(); d.vaultBps = 9_000;       // not 100% to vault
-        (ok,) = factory.onBeforeLaunch(abi.encode(d)); assertFalse(ok);
-
-        d = _validPayload(); d.minimumShareBalance = 1e18;
+        d = _validPayload(); d.dividendBps = 100;       // not tracker-only
         (ok,) = factory.onBeforeLaunch(abi.encode(d)); assertFalse(ok);
 
         d = _validPayload(); d.quoteToken = address(0); // BNB pairing rejected
@@ -175,10 +182,25 @@ contract VaultFactoryTest is Test {
         (ok,) = factory.onBeforeLaunch(abi.encode(d)); assertFalse(ok);
     }
 
+    function test_V3_PingRecognizesRevenue_ZeroDeltaNoOp() public {
+        AssVault v = _newVault();
+        assertEq(v.vaultQuoteToken(), QQQB);
+        qqqb.mint(address(v), 3 ether);
+        (bool ok,) = address(v).call{value: 0}("");   // the TaxProcessor ping
+        assertTrue(ok);
+        assertEq(v.accountedQuote(), 3 ether);
+        (ok,) = address(v).call{value: 0}("");        // spurious ping: silent no-op
+        assertTrue(ok);
+        assertEq(v.accountedQuote(), 3 ether);
+        vm.prank(creator); v.setEngine(engine);
+        vm.prank(creator); v.release();
+        assertEq(v.accountedQuote(), 0);              // rule 3: baseline decremented — no deadlock
+    }
+
     function test_DescriptionAndSchema_Respond() public {
         AssVault v = _newVault();
         assertGt(bytes(v.description()).length, 0);
-        assertEq(v.vaultUISchema().methods.length, 4);
+        assertEq(v.vaultUISchema().methods.length, 5);
         assertEq(factory.vaultDataSchema().fields.length, 0);
         assertEq(factory.isQuoteTokenSupported(QQQB), true);
         assertEq(factory.isQuoteTokenSupported(address(0)), false); // BNB no longer supported

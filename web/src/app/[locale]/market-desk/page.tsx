@@ -35,7 +35,7 @@ export default function MarketDesk() {
 
   const kpis = [
     { label: t("kpiAccrued"), value: accruedUsd == null ? "—" : usd(accruedUsd) },
-    { label: t("kpiProcessed"), value: stats ? fmtUnits(stats.cumulativeBnbProcessed) : "—" },
+    { label: t("kpiProcessed"), value: stats ? fmtUnits(stats.cumulativeQuoteProcessed) : "—" },
     { label: t("kpiHolders"), value: idx ? String(idx.holders) : "—" },
     { label: t("kpiVolume"), value: usd(markets?.ass.volume24h ?? null, 0) },
   ];
@@ -84,7 +84,7 @@ export default function MarketDesk() {
                   <Tooltip contentStyle={{ background: "#0B0D18", border: "1px solid rgba(245,241,232,0.1)",
                       borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 12 }}
                     labelStyle={{ color: "#A9A2B8", marginBottom: 4 }}
-                    formatter={(v) => [`${Number(v ?? 0).toFixed(6)} BNB`, "CUMULATIVE"]} />
+                    formatter={(v) => [`${Number(v ?? 0).toFixed(6)} QQQB`, "CUMULATIVE"]} />
                   <Area type="stepAfter" dataKey="bnb" stroke="#9747FF" strokeWidth={2} fill="url(#g)" />
                 </AreaChart>
               </ResponsiveContainer>
@@ -175,7 +175,7 @@ export default function MarketDesk() {
                   <span className="text-term-dim">{new Date(f.ts * 1000).toISOString().slice(5, 16).replace("T", " ")}</span>
                   <span className="text-gain">{f.action}</span>
                   <span className="text-warm-white">{s?.symbol ?? shortAddr(f.asset)}</span>
-                  <span className="text-warm-white/70">{fmtUnits(BigInt(f.wbnbSpent))} BNB</span>
+                  <span className="text-warm-white/70">{fmtUnits(BigInt(f.quoteSpent))} QQQB</span>
                   <span className="text-lavender">{shortAddr(f.tx)}</span>
                 </a>
               );
