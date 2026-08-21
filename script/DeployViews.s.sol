@@ -16,13 +16,14 @@ contract DeployViews is Script {
     address constant TRACKER = address(0xae11E7f561d5452BE6a390f122abeB5AB50551Fc);      // <- FILL: token.dividendContract()
 
     function run() external {
-        require(VAULT != address(0), "FILL: VAULT");
-        require(ENGINE != address(0), "FILL: ENGINE");
-        require(DISTRIBUTOR != address(0), "FILL: DISTRIBUTOR");
-        require(TRACKER != address(0), "FILL: TRACKER");
+        address vault = vm.envAddress("VAULT");
+        address engine = vm.envAddress("ENGINE");
+        address distributor = vm.envAddress("DIST");
+        address tracker = vm.envAddress("DIV");
+        require(vault != address(0) && engine != address(0) && distributor != address(0) && tracker != address(0), "env incomplete");
 
         vm.startBroadcast();
-        AssViews views = new AssViews(VAULT, ENGINE, DISTRIBUTOR, TRACKER);
+        AssViews views = new AssViews(vault, engine, distributor, tracker);
         vm.stopBroadcast();
         console2.log("views:", address(views));
     }

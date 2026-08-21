@@ -95,7 +95,14 @@ if (!process.argv.includes('--execute')) {
   process.exit(0)
 }
 
-if (await phase() !== 0) { console.error(`distributor not Idle (phase=${await phase()}) — resolve first (abortCycle?)`); process.exit(1) }
+// self-recovery: a wedged Snapshot/Payout phase from a prior failed run must
+// never require a human again (incident 2026-08-20: stale-tracker wedge)
+const p0 = await phase()
+if (p0 !== 0) {
+  console.error(`distributor not Idle (phase=${p0}) — aborting stale cycle first`)
+  send('abortCycle()')
+  if (await phase() !== 0) { console.error('abort did not return distributor to Idle — halting'); process.exit(1) }
+}
 send('startCycle()')
 for (let i = 0; i < active.length; i += SUBMIT_BATCH) {
   const batch = active.slice(i, i + SUBMIT_BATCH).map(([a]) => a)
