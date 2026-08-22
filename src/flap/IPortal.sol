@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.13;
 
-import {IAccessControlUpgradeable} from "@openzeppelin-contracts-upgradeable/access/IAccessControlUpgradeable.sol";
+import {IAccessControl as IAccessControlUpgradeable} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
 /// @dev Magic address value for `dividendToken` in NewTokenV6Params.
 ///      When set to this address, the dividend token is resolved to the tax token's own address

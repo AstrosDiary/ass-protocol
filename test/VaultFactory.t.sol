@@ -2,7 +2,7 @@
 pragma solidity ^0.8.26;
 
 import {Test} from "forge-std/Test.sol";
-import {UpgradeableBeacon} from "@openzeppelin/proxy/beacon/UpgradeableBeacon.sol";
+import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import {AssVault} from "../src/vault/AssVault.sol";
 import {AssVaultFactory} from "../src/vault/AssVaultFactory.sol";
 import {IVaultFactory, IVaultFactoryValidationV2} from "../src/flap/IVaultFactory.sol";

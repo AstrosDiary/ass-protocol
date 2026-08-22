@@ -5,6 +5,8 @@ import {Test} from "forge-std/Test.sol";
 import {AssDistributor} from "../src/distributor/AssDistributor.sol";
 import {MockFlapDividend} from "./mocks/MockFlapDividend.sol";
 import {MockBStock} from "./mocks/MockBStock.sol";
+import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 
 contract DistributorTest is Test {
     AssDistributor dist;
@@ -17,8 +19,14 @@ contract DistributorTest is Test {
     // sorted ascending by construction below
     address h1; address h2; address h3;
 
+    function _proxy(address impl, bytes memory init) internal returns (address) {
+        return address(new BeaconProxy(address(new UpgradeableBeacon(impl, address(this))), init));
+    }
+
     function setUp() public {
-        dist = new AssDistributor(owner);
+        vm.chainId(56); // guardian chain-map needs a mapped chain
+
+        dist = AssDistributor(_proxy(address(new AssDistributor()), abi.encodeCall(AssDistributor.initialize, (owner))));
         tracker = new MockFlapDividend();
         stockA = new MockBStock();
         stockB = new MockBStock();

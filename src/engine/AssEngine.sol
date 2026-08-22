@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {Ownable} from "@openzeppelin/access/Ownable.sol";
-import {ReentrancyGuard} from "@openzeppelin/utils/ReentrancyGuard.sol";
-import {IERC20} from "@openzeppelin/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/token/ERC20/utils/SafeERC20.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {AssSwapExecutor} from "../adapters/AssSwapExecutor.sol";
 
 /// @title AssEngine — revenue processing and basket budgeting for $ASS
@@ -16,10 +17,12 @@ import {AssSwapExecutor} from "../adapters/AssSwapExecutor.sol";
 /// @dev Inflow and budgets share one ERC20 balance, so processing takes only
 /// the unearmarked portion: balance minus outstanding budgets. No native BNB
 /// path exists anywhere (no receive/fallback).
-contract AssEngine is Ownable, ReentrancyGuard {
+/// Beacon-upgradeable per Flap satellite doctrine: Guardian owns the beacon
+/// and is a parallel emergency caller on sensitive admin (onlyOwnerOrGuardian).
+contract AssEngine is Initializable, OwnableUpgradeable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
-    IERC20 public immutable quote; // QQQB — Invesco QQQ Trust bStock
+    IERC20 public quote; // QQQB
     AssSwapExecutor public executor;
     address public distributor;
     mapping(address => bool) public keeper;
@@ -36,14 +39,18 @@ contract AssEngine is Ownable, ReentrancyGuard {
     mapping(address => uint256) public budget; // quote earmarked per asset (carry-forward lives here)
     uint16 public totalWeightBps;
 
-    uint256 public minProcessAmount = 0.05 ether; // QQQB raw units — don't churn dust cycles
+    uint256 public minProcessAmount;              // QQQB raw units — don't churn dust cycles
     uint256 public cumulativeQuoteProcessed;      // Σ allocated to budgets (never double-counts)
     mapping(address => uint256) public cumulativeSpent;  // quote per asset
     mapping(address => uint256) public cumulativeBought; // bStock raw units per asset
 
+    address public gasFund;   // AssTriggerAdapter — receives the automation-gas skim
+    uint16  public gasFundBps;
+
     event KeeperSet(address indexed k, bool on);
     event ExecutorSet(address indexed executor);
     event DistributorSet(address indexed distributor);
+    event GasFundSet(address indexed fund, uint16 bps);
     event AssetAdded(address indexed asset, uint16 weightBps, uint128 maxSpendPerBuy);
     event AssetConfigured(address indexed asset, bool enabled, uint16 weightBps, uint128 maxSpendPerBuy);
     event RevenueProcessed(uint256 quoteIn, uint256 allocated, uint256 unallocatedCarry);
@@ -61,24 +68,51 @@ contract AssEngine is Ownable, ReentrancyGuard {
     error OverBudget();
     error OverMaxSpend();
     error NotSelf();
+    error Unauthorized();
+    error UnsupportedChain(uint256 chainId);
+
+    // ---------------------------------------------------------- guardian mandate
+    function _getGuardian() internal view returns (address) {
+        uint256 chainId = block.chainid;
+        if (chainId == 56) return 0x9e27098dcD8844bcc6287a557E0b4D09C86B8a4b;
+        if (chainId == 97) return 0x76Fa8C526f8Bc27ba6958B76DeEf92a0dbE46950;
+        if (chainId == 4663 || chainId == 46630) return 0x0000b48720d3B4ED6BC5031768B07F2b59270000;
+        revert UnsupportedChain(chainId);
+    }
+
+    modifier onlyOwnerOrGuardian() {
+        if (msg.sender != owner() && msg.sender != _getGuardian()) revert Unauthorized();
+        _;
+    }
 
     modifier onlyKeeper() {
         if (!keeper[msg.sender] && msg.sender != owner()) revert NotKeeper();
         _;
     }
 
-    constructor(address quote_, address owner_) Ownable(owner_) {
+    constructor() { _disableInitializers(); }
+
+    function initialize(address quote_, address owner_) external initializer {
         require(quote_ != address(0) && quote_.code.length > 0, "bad quote");
+        __Ownable_init(owner_);
         quote = IERC20(quote_);
+        minProcessAmount = 0.05 ether; // proxy-safe default (declaration-site defaults don't run under proxies)
     }
 
     // ---------------------------------------------------------------- admin
-    function setKeeper(address k, bool on) external onlyOwner { keeper[k] = on; emit KeeperSet(k, on); }
-    function setExecutor(address e) external onlyOwner { executor = AssSwapExecutor(e); emit ExecutorSet(e); }
-    function setDistributor(address d) external onlyOwner { distributor = d; emit DistributorSet(d); }
-    function setMinProcessAmount(uint256 v) external onlyOwner { minProcessAmount = v; }
+    function setKeeper(address k, bool on) external onlyOwnerOrGuardian { keeper[k] = on; emit KeeperSet(k, on); }
+    function setExecutor(address e) external onlyOwnerOrGuardian { executor = AssSwapExecutor(e); emit ExecutorSet(e); }
+    function setDistributor(address d) external onlyOwnerOrGuardian { distributor = d; emit DistributorSet(d); }
+    function setMinProcessAmount(uint256 v) external onlyOwnerOrGuardian { minProcessAmount = v; }
 
-    function addAsset(address asset, uint16 weightBps, uint128 maxSpendPerBuy) external onlyOwner {
+    function setGasFund(address f, uint16 bps) external onlyOwnerOrGuardian {
+        require(bps <= 300, "max 3%");
+        gasFund = f;
+        gasFundBps = bps;
+        emit GasFundSet(f, bps);
+    }
+
+    function addAsset(address asset, uint16 weightBps, uint128 maxSpendPerBuy) external onlyOwnerOrGuardian {
         if (assets[asset].registered) revert AssetRegistered();
         if (asset == address(quote)) revert AssetIsQuote(); // basket asset can never be the quote
         require(asset != address(0) && asset.code.length > 0, "bad asset");
@@ -93,7 +127,7 @@ contract AssEngine is Ownable, ReentrancyGuard {
     /// @dev enable/disable, reweight, retune spend cap — never removal.
     function configureAsset(address asset, bool enabled, uint16 weightBps, uint128 maxSpendPerBuy)
         external
-        onlyOwner
+        onlyOwnerOrGuardian
     {
         Asset storage a = assets[asset];
         if (!a.registered) revert UnknownAsset();
@@ -107,8 +141,8 @@ contract AssEngine is Ownable, ReentrancyGuard {
     }
 
     /// @notice Manual carry-forward control: move a stuck asset's budget to a
-    /// routable one (e.g. prolonged corporate-action pause). Keeper-gated,
-    /// registered assets only — funds can never leave the basket system.
+    /// routable one. Keeper-gated, registered assets only — funds can never
+    /// leave the basket system.
     function reassignBudget(address from, address to, uint256 amount) external onlyKeeper {
         if (!assets[from].registered || !assets[to].registered) revert UnknownAsset();
         if (!assets[to].enabled) revert AssetDisabled();
@@ -125,6 +159,14 @@ contract AssEngine is Ownable, ReentrancyGuard {
     function processRevenue() external onlyKeeper nonReentrant {
         uint256 unprocessed = _unallocated();
         if (unprocessed < minProcessAmount) revert NothingToProcess();
+
+        // automation-gas skim: a small slice of processed revenue funds the
+        // trigger-fee tank BEFORE weight-splitting (excluded from cumulative —
+        // the chart reports strategy allocation only)
+        if (gasFund != address(0) && gasFundBps != 0) {
+            uint256 skim = (unprocessed * gasFundBps) / 10_000;
+            if (skim != 0) { quote.safeTransfer(gasFund, skim); unprocessed -= skim; }
+        }
 
         uint256 allocated;
         for (uint256 i; i < allAssets.length; ++i) {

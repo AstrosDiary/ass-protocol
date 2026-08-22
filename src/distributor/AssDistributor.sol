@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {Ownable} from "@openzeppelin/access/Ownable.sol";
-import {ReentrancyGuard} from "@openzeppelin/utils/ReentrancyGuard.sol";
-import {IERC20} from "@openzeppelin/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/token/ERC20/utils/SafeERC20.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IFlapDividend} from "../interfaces/IFlapDividend.sol";
 
 /// @title AssDistributor — multi-asset (bStock) reward distributor for $ASS
@@ -14,7 +15,9 @@ import {IFlapDividend} from "../interfaces/IFlapDividend.sol";
 /// userInfo(), reconciles coverage against totalShares(), and pays
 /// min(snapshotShare, liveShare) — flash/transfer-games can only reduce a payout.
 /// All amounts are RAW on-chain units (BEP-677: multiplier is display-layer only).
-contract AssDistributor is Ownable, ReentrancyGuard {
+/// @dev Beacon-upgradeable per Flap satellite doctrine: Guardian owns the
+/// beacon and is a parallel emergency caller on admin (onlyOwnerOrGuardian).
+contract AssDistributor is Initializable, OwnableUpgradeable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     // ---------------------------------------------------------------- roles
@@ -38,7 +41,7 @@ contract AssDistributor is Ownable, ReentrancyGuard {
     uint256 public totalSnapShares;
     uint256 public payoutCursor;
     address public lastSubmitted;        // enforces ascending submission => no duplicates
-    uint16  public coverageBps = 9000;   // snapshot must cover >= 90% of tracker totalShares()
+    uint16  public coverageBps;          // snapshot must cover >= this share of tracker totalShares()
 
     mapping(uint64 => Entry[])   internal _entries;
     mapping(uint64 => address[]) internal _cycleAssets;
@@ -76,25 +79,46 @@ contract AssDistributor is Ownable, ReentrancyGuard {
     error AssetIsRegistered();
     error NothingOwed();
     error BelowMinPayout();
+    error Unauthorized();
+    error UnsupportedChain(uint256 chainId);
+
+    // ---------------------------------------------------------- guardian mandate
+    function _getGuardian() internal view returns (address) {
+        uint256 chainId = block.chainid;
+        if (chainId == 56) return 0x9e27098dcD8844bcc6287a557E0b4D09C86B8a4b;
+        if (chainId == 97) return 0x76Fa8C526f8Bc27ba6958B76DeEf92a0dbE46950;
+        if (chainId == 4663 || chainId == 46630) return 0x0000b48720d3B4ED6BC5031768B07F2b59270000;
+        revert UnsupportedChain(chainId);
+    }
+
+    modifier onlyOwnerOrGuardian() {
+        if (msg.sender != owner() && msg.sender != _getGuardian()) revert Unauthorized();
+        _;
+    }
 
     modifier onlyKeeper() {
         if (!keeper[msg.sender] && msg.sender != owner()) revert NotKeeper();
         _;
     }
 
-    constructor(address owner_) Ownable(owner_) {}
+    constructor() { _disableInitializers(); }
+
+    function initialize(address owner_) external initializer {
+        __Ownable_init(owner_);
+        coverageBps = 9_000; // proxy-safe default (declaration-site defaults don't run under proxies)
+    }
 
     // ================================================================ admin
-    function setKeeper(address k, bool on) external onlyOwner { keeper[k] = on; emit KeeperSet(k, on); }
+    function setKeeper(address k, bool on) external onlyOwnerOrGuardian { keeper[k] = on; emit KeeperSet(k, on); }
 
-    function setDividendTracker(address t) external onlyOwner {
+    function setDividendTracker(address t) external onlyOwnerOrGuardian {
         require(t.code.length > 0, "no code");
         IFlapDividend(t).totalShares(); // must respond like a tracker
         dividendTracker = IFlapDividend(t);
         emit DividendTrackerSet(t);
     }
 
-    function setCoverageBps(uint16 bps) external onlyOwner {
+    function setCoverageBps(uint16 bps) external onlyOwnerOrGuardian {
         require(bps <= 10_000, "bps");
         coverageBps = bps;
         emit CoverageSet(bps);
@@ -108,7 +132,7 @@ contract AssDistributor is Ownable, ReentrancyGuard {
         emit MinPayoutSet(asset, amount);
     }
 
-    function addAsset(address asset) external onlyOwner {
+    function addAsset(address asset) external onlyOwnerOrGuardian {
         if (assetInfo[asset].registered) revert AssetIsRegistered();
         require(asset != address(0) && asset.code.length > 0, "bad asset");
         IERC20(asset).balanceOf(address(this)); // must behave like ERC-20
@@ -119,13 +143,13 @@ contract AssDistributor is Ownable, ReentrancyGuard {
 
     /// @dev disable = excluded from NEW cycles. Accrued balances stay claimable
     /// forever; registered assets are never sweepable. (Zero-weight-over-removal.)
-    function setAssetEnabled(address asset, bool enabled) external onlyOwner {
+    function setAssetEnabled(address asset, bool enabled) external onlyOwnerOrGuardian {
         if (!assetInfo[asset].registered) revert UnknownAsset();
         assetInfo[asset].enabled = enabled;
         emit AssetEnabled(asset, enabled);
     }
 
-    function sweepForeign(address token, address to) external onlyOwner {
+    function sweepForeign(address token, address to) external onlyOwnerOrGuardian {
         require(!assetInfo[token].registered, "registered asset"); // forever barred
         uint256 bal = IERC20(token).balanceOf(address(this));
         IERC20(token).safeTransfer(to, bal);

@@ -6,6 +6,8 @@ import {AssEngine} from "../src/engine/AssEngine.sol";
 import {AssSwapExecutor} from "../src/adapters/AssSwapExecutor.sol";
 import {MockBStock} from "./mocks/MockBStock.sol";
 import {MockRouter} from "./mocks/MockRouter.sol";
+import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 
 contract EngineExecutorTest is Test {
     AssEngine engine;
@@ -18,14 +20,20 @@ contract EngineExecutorTest is Test {
     address keeper = makeAddr("keeper");
     address distributor = makeAddr("distributor");
 
+    function _proxy(address impl, bytes memory init) internal returns (address) {
+        return address(new BeaconProxy(address(new UpgradeableBeacon(impl, address(this))), init));
+    }
+
     function setUp() public {
+        vm.chainId(56); // guardian chain-map needs a mapped chain
+
         qqqb = new MockBStock();
         babab = new MockBStock();
         stock4 = new MockBStock();
         router = new MockRouter();
 
-        engine = new AssEngine(address(qqqb), owner);
-        exec = new AssSwapExecutor(address(qqqb), owner);
+        engine = AssEngine(_proxy(address(new AssEngine()), abi.encodeCall(AssEngine.initialize, (address(qqqb), owner))));
+        exec = AssSwapExecutor(_proxy(address(new AssSwapExecutor()), abi.encodeCall(AssSwapExecutor.initialize, (address(qqqb), owner))));
 
         vm.startPrank(owner);
         engine.setKeeper(keeper, true);

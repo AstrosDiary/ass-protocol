@@ -2,7 +2,8 @@
 pragma solidity ^0.8.26;
 
 import {Test} from "forge-std/Test.sol";
-import {UpgradeableBeacon} from "@openzeppelin/proxy/beacon/UpgradeableBeacon.sol";
+import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import {AssVault} from "../src/vault/AssVault.sol";
 import {AssVaultFactory} from "../src/vault/AssVaultFactory.sol";
 import {AssEngine} from "../src/engine/AssEngine.sol";
@@ -35,6 +36,10 @@ contract E2ETest is Test {
     address taxProcessor = makeAddr("taxProcessor");
     address h1 = address(0x1000); address h2 = address(0x2000); address h3 = address(0x3000);
 
+    function _proxy(address impl, bytes memory init) internal returns (address) {
+        return address(new BeaconProxy(address(new UpgradeableBeacon(impl, address(this))), init));
+    }
+
     function setUp() public {
         vm.chainId(56);
 
@@ -60,9 +65,9 @@ contract E2ETest is Test {
         stocks = [address(babab), address(tsmb), address(skhyb), address(stock4)];
 
         vm.startPrank(deployer);
-        engine = new AssEngine(QQQB, deployer);
-        exec = new AssSwapExecutor(QQQB, deployer);
-        dist = new AssDistributor(deployer);
+        engine = AssEngine(_proxy(address(new AssEngine()), abi.encodeCall(AssEngine.initialize, (QQQB, deployer))));
+        exec = AssSwapExecutor(_proxy(address(new AssSwapExecutor()), abi.encodeCall(AssSwapExecutor.initialize, (QQQB, deployer))));
+        dist = AssDistributor(_proxy(address(new AssDistributor()), abi.encodeCall(AssDistributor.initialize, (deployer))));
 
         vault.setEngine(address(engine));
         engine.setExecutor(address(exec));
@@ -74,7 +79,7 @@ contract E2ETest is Test {
         dist.setKeeper(deployer, true);
         dist.setDividendTracker(address(tracker));
         for (uint256 i; i < 4; ++i) {
-            engine.addAsset(stocks[i], 2500, 100 ether); // 25/25/25/25
+            engine.addAsset(stocks[i], 2500, 100 ether);
             dist.addAsset(stocks[i]);
         }
         vm.stopPrank();

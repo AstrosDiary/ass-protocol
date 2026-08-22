@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.13;
 
-import {IERC20} from "@openzeppelin/token/ERC20/IERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /// @title IFlapTaxTokenV3
 /// @notice Interface for FlapTaxTokenV3 — the next-generation tax token with asymmetric buy/sell

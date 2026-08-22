@@ -1,25 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {Ownable} from "@openzeppelin/access/Ownable.sol";
-import {ReentrancyGuard} from "@openzeppelin/utils/ReentrancyGuard.sol";
-import {IERC20} from "@openzeppelin/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/token/ERC20/utils/SafeERC20.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /// @title AssSwapExecutor — validated execution of keeper-supplied router calldata
-/// @notice The keeper discovers routes off-chain (QuoterV2 enumeration over
-/// Pancake pools) and submits opaque calldata. This contract enforces the
-/// safety invariants so the calldata's CONTENT never needs to be trusted:
-/// allowlisted router, exact quote-token (QQQB) approval (reset after), zero
-/// native value, output measured as OUR OWN balance delta of the expected
-/// bStock, raw-unit minOut, then forwarded to the fixed recipient
-/// (distributor). A route that pays anyone else yields delta 0 and reverts on
-/// minOut.
-contract AssSwapExecutor is Ownable, ReentrancyGuard {
+/// @notice (invariants unchanged — see prior NatSpec) Beacon-upgradeable per
+/// Flap satellite doctrine: Guardian owns the beacon and is a parallel
+/// emergency caller on every sensitive function (onlyOwnerOrGuardian).
+contract AssSwapExecutor is Initializable, OwnableUpgradeable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
-    IERC20 public immutable quote;              // QQQB — swap input token
-    address public engine;                      // sole authorized caller
+    IERC20 public quote;                        // QQQB (storage — proxy pattern)
+    address public engine;
     mapping(address => bool) public routerAllowed;
 
     event RouterSet(address indexed router, bool allowed);
@@ -32,17 +28,34 @@ contract AssSwapExecutor is Ownable, ReentrancyGuard {
     error ZeroMinOut();
     error Slippage(uint256 got, uint256 minOut);
     error RouterCallFailed(bytes reason);
+    error Unauthorized();
+    error UnsupportedChain(uint256 chainId);
 
-    constructor(address quote_, address owner_) Ownable(owner_) {
+    // ---- Flap guardian mandate (satellite form) ----
+    function _getGuardian() internal view returns (address) {
+        uint256 chainId = block.chainid;
+        if (chainId == 56) return 0x9e27098dcD8844bcc6287a557E0b4D09C86B8a4b;
+        if (chainId == 97) return 0x76Fa8C526f8Bc27ba6958B76DeEf92a0dbE46950;
+        if (chainId == 4663 || chainId == 46630) return 0x0000b48720d3B4ED6BC5031768B07F2b59270000;
+        revert UnsupportedChain(chainId);
+    }
+
+    modifier onlyOwnerOrGuardian() {
+        if (msg.sender != owner() && msg.sender != _getGuardian()) revert Unauthorized();
+        _;
+    }
+
+    constructor() { _disableInitializers(); }
+
+    function initialize(address quote_, address owner_) external initializer {
         require(quote_ != address(0) && quote_.code.length > 0, "bad quote");
+        __Ownable_init(owner_);
         quote = IERC20(quote_);
     }
 
-    function setEngine(address e) external onlyOwner { engine = e; emit EngineSet(e); }
-    function setRouter(address r, bool on) external onlyOwner { routerAllowed[r] = on; emit RouterSet(r, on); }
+    function setEngine(address e) external onlyOwnerOrGuardian { engine = e; emit EngineSet(e); }
+    function setRouter(address r, bool on) external onlyOwnerOrGuardian { routerAllowed[r] = on; emit RouterSet(r, on); }
 
-    /// @notice Engine transfers `spend` QQQB here first, then calls this.
-    /// @return spent actual quote consumed  @return received bStock delivered to `recipient`
     function execute(
         address router,
         bytes calldata routerCalldata,
@@ -54,29 +67,24 @@ contract AssSwapExecutor is Ownable, ReentrancyGuard {
     ) external nonReentrant returns (uint256 spent, uint256 received) {
         if (msg.sender != engine) revert OnlyEngine();
         if (!routerAllowed[router]) revert RouterNotAllowed();
-        // block.timestamp here is a quote-staleness fence (priced quotes expire),
-        // per spec's keeper-security requirements. Validator drift of a few
-        // seconds is immaterial: minOut independently bounds execution price.
-        // Identical pattern to Uniswap/Pancake router checkDeadline.
         // forge-lint: disable-next-line(block-timestamp)
         if (block.timestamp > deadline) revert DeadlinePassed();
-        if (minOut == 0) revert ZeroMinOut(); // keeper must always price the trade
+        if (minOut == 0) revert ZeroMinOut();
 
         uint256 quoteBefore = quote.balanceOf(address(this));
         uint256 outBefore = IERC20(tokenOut).balanceOf(address(this));
 
-        quote.forceApprove(router, spend);                      // exact, never unlimited
-        (bool ok, bytes memory ret) = router.call(routerCalldata); // value: 0 — always
+        quote.forceApprove(router, spend);
+        (bool ok, bytes memory ret) = router.call(routerCalldata);
         if (!ok) revert RouterCallFailed(ret);
-        quote.forceApprove(router, 0);                          // approval never lingers
+        quote.forceApprove(router, 0);
 
-        received = IERC20(tokenOut).balanceOf(address(this)) - outBefore; // measured, not reported
+        received = IERC20(tokenOut).balanceOf(address(this)) - outBefore;
         if (received < minOut) revert Slippage(received, minOut);
         spent = quoteBefore - quote.balanceOf(address(this));
 
-        IERC20(tokenOut).safeTransfer(recipient, received);     // fixed destination
+        IERC20(tokenOut).safeTransfer(recipient, received);
 
-        // return any unspent quote to the engine (partial fills etc.)
         uint256 leftover = quote.balanceOf(address(this));
         if (leftover > 0) quote.safeTransfer(engine, leftover);
 

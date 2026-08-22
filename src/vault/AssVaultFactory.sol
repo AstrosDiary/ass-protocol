@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {BeaconProxy} from "@openzeppelin/proxy/beacon/BeaconProxy.sol";
+import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import {VaultFactoryBaseV2} from "../flap/VaultFactoryBaseV2.sol";
 import {IVaultFactoryValidationV2} from "../flap/IVaultFactory.sol";
 import {VaultDataSchema, FieldDescriptor, FactoryPolicy} from "../flap/IVaultSchemasV1.sol";
