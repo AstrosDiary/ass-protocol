@@ -161,8 +161,15 @@ contract AssTriggerAdapter is Initializable, OwnableUpgradeable, ReentrancyGuard
 
     /// @notice kick-start (or manually re-arm) the self-perpetuating cycle.
     /// @param delay seconds from now (0 = ASAP)
+    /// @dev Reverts on an empty gas tank: for the owner-facing entry point a
+    /// silent no-op would hide a dead scheduler. The INTERNAL self-rearm path
+    /// (_requestCycle from trigger()) deliberately stays non-reverting instead
+    /// (fail-soft doctrine): a drained tank lapses automation loudly via
+    /// FundingLow and falls back to the manual keeper — it never wedges a
+    /// callback.
     function scheduleCycle(uint64 delay) external onlyOwnerOrGuardian returns (uint256 id) {
-        return _requestCycle(delay == 0 ? 0 : uint64(block.timestamp) + delay);
+        id = _requestCycle(delay == 0 ? 0 : uint64(block.timestamp) + delay);
+        require(id != type(uint256).max, "insufficient BNB for fee");
     }
 
     // ---------------------------------------------------------------- callback

@@ -10,6 +10,21 @@ contract MockRouter {
     uint256 public rate = 100e18; // tokenOut per 1e18 WBNB
     address public thief = address(0xBAD);
 
+    // Adapter compatibility: the TriggerAdapter calls multicall(deadline, [exactInput(...)]).
+    // Decode just enough to service it: pull the allowance of `pairIn` from the
+    // caller, mint `pairOut` at `rate` to the caller. Configure per-test for
+    // whichever leg (bStock buy or gas top-up) the test exercises.
+    address public pairIn; address public pairOut;
+    function setPair(address in_, address out_) external { pairIn = in_; pairOut = out_; }
+
+    fallback(bytes calldata) external returns (bytes memory) {
+        require(mode != Mode.Revert, "router: no route");
+        uint256 amountIn = IERC20(pairIn).allowance(msg.sender, address(this));
+        IERC20(pairIn).transferFrom(msg.sender, address(this), amountIn);
+        MockBStock(pairOut).mint(msg.sender, amountIn * rate / 1e18);
+        return "";
+    }
+
     function setMode(Mode m) external { mode = m; }
     function setRate(uint256 r) external { rate = r; }
 
