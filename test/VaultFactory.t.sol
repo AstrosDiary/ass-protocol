@@ -7,6 +7,8 @@ import {AssVault} from "../src/vault/AssVault.sol";
 import {AssVaultFactory} from "../src/vault/AssVaultFactory.sol";
 import {IVaultFactory, IVaultFactoryValidationV2} from "../src/flap/IVaultFactory.sol";
 import {IPortalTypes} from "../src/flap/IPortal.sol";
+import {MockBStock} from "./mocks/MockBStock.sol";
+import {FactoryPolicy} from "../src/flap/IVaultSchemasV1.sol";
 
 /// Minimal ERC20 etched at the real QQQB address so the vault's hardcoded
 /// QUOTE constant resolves against controllable code in tests.
@@ -33,6 +35,8 @@ contract VaultFactoryTest is Test {
     address constant PORTAL = 0x90497450f2a706f1951b5bdda52B4E5d16f34C06;  // BSC VaultPortal
     address constant GUARDIAN = 0x9e27098dcD8844bcc6287a557E0b4D09C86B8a4b; // BSC Guardian
     address constant QQQB = 0x205812CdBed920aFf76C6580abD681a46D11efc7;    // Invesco QQQ Trust bStock
+    address constant MAGIC_DIVIDEND_COMPUTED = 0xC0Dec0dec0DeC0Dec0dEc0DEC0DEC0DEC0DEC0dE;
+    address basketStub;
     address creator = makeAddr("creator");
     address taxToken = makeAddr("taxToken");
     address engine = makeAddr("engine");
@@ -43,7 +47,8 @@ contract VaultFactoryTest is Test {
         qqqb = MockQuote(QQQB);
         impl = new AssVault();
         beacon = new UpgradeableBeacon(address(impl), address(this)); // -> Guardian pre-audit
-        factory = new AssVaultFactory(address(beacon));
+        basketStub = address(new MockBStock());
+        factory = new AssVaultFactory(address(beacon), basketStub);
     }
 
     function _newVault() internal returns (AssVault v) {
@@ -141,7 +146,7 @@ contract VaultFactoryTest is Test {
         d.deflationBps = 0;
         d.dividendBps = 0;
         d.lpBps = 0;
-        d.dividendToken = address(0);
+        d.dividendToken = MAGIC_DIVIDEND_COMPUTED;
     }
 
     function test_OnBeforeLaunch_AcceptsCanonicalProfile() public view {
@@ -180,6 +185,12 @@ contract VaultFactoryTest is Test {
 
         d = _validPayload(); d.quoteToken = makeAddr("usdt"); // any other ERC20 rejected
         (ok,) = factory.onBeforeLaunch(abi.encode(d)); assertFalse(ok);
+
+        d = _validPayload(); d.dividendToken = address(0);          // sentinel is mandatory
+        (ok,) = factory.onBeforeLaunch(abi.encode(d)); assertFalse(ok);
+
+        d = _validPayload(); d.dividendToken = makeAddr("some-token"); // even a real-looking token
+        (ok,) = factory.onBeforeLaunch(abi.encode(d)); assertFalse(ok);
     }
 
     function test_V3_PingRecognizesRevenue_ZeroDeltaNoOp() public {
@@ -205,5 +216,22 @@ contract VaultFactoryTest is Test {
         assertEq(factory.isQuoteTokenSupported(QQQB), true);
         assertEq(factory.isQuoteTokenSupported(address(0)), false); // BNB no longer supported
         assertEq(factory.isQuoteTokenSupported(makeAddr("usdt")), false);
+    }
+
+    /// v2.3 computed-dividend resolution (docs: lp-token-as-dividend): the
+    /// portal staticcalls this at launch and substitutes the result for the
+    /// MAGIC_DIVIDEND_COMPUTED sentinel — this is how the basket gets wired
+    /// in the launch tx itself, with no post-launch call.
+    function test_ResolveDividendToken_ReturnsBasket() public view {
+        assertEq(factory.resolveDividendToken(address(0xBEEF), 6, ""), basketStub);
+        assertEq(factory.BASKET(), basketStub);
+    }
+
+    function test_Policies_DeclareComputedDividend() public view {
+        // p[5] backs the on-chain sentinel pin (policies are UI-advisory only)
+        FactoryPolicy[] memory p = factory.tokenCreationPolicies();
+        assertEq(p.length, 6);
+        assertEq(p[5].target, "dividendToken");
+        assertEq(abi.decode(p[5].value, (address)), MAGIC_DIVIDEND_COMPUTED);
     }
 }

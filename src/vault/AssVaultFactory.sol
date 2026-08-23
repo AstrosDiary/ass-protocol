@@ -3,9 +3,9 @@ pragma solidity ^0.8.26;
 
 import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import {VaultFactoryBaseV2} from "../flap/VaultFactoryBaseV2.sol";
-import {IVaultFactoryValidationV2} from "../flap/IVaultFactory.sol";
+import {IVaultFactoryValidationV2, IVaultFactoryDividendV23} from "../flap/IVaultFactory.sol";
 import {VaultDataSchema, FieldDescriptor, FactoryPolicy} from "../flap/IVaultSchemasV1.sol";
-import {IPortalTypes} from "../flap/IPortal.sol";
+import {IPortalTypes, MAGIC_DIVIDEND_COMPUTED} from "../flap/IPortal.sol";
 import {AssVault} from "./AssVault.sol";
 
 /// @title AssVaultFactory — deploys AssVault beacon proxies via Flap VaultPortal
@@ -13,22 +13,38 @@ import {AssVault} from "./AssVault.sol";
 /// UpgradeableBeacon (upgrade authority: Flap Guardian, per audit spec).
 /// onBeforeLaunch pins the exact $ASS launch configuration on-chain so a
 /// misconfigured launch reverts at the portal.
-contract AssVaultFactory is VaultFactoryBaseV2 {
+contract AssVaultFactory is VaultFactoryBaseV2, IVaultFactoryDividendV23 {
     address public immutable beacon;
+    address public immutable BASKET; // IB-ASS basket proxy — resolved as dividendToken at launch
 
     /// @dev the exact launch profile this factory permits
     address public constant REQUIRED_QUOTE = 0x205812CdBed920aFf76C6580abD681a46D11efc7; // QQQB
 
     event VaultCreated(address indexed vault, address indexed taxToken, address indexed creator);
 
-    constructor(address beacon_) {
+    constructor(address beacon_, address basket_) {
         require(beacon_ != address(0), "ASS: zero beacon");
         beacon = beacon_;
+        require(basket_ != address(0) && basket_.code.length > 0, "bad basket");
+        BASKET = basket_;
     }
 
     /// @dev v2.3: the gate VaultPortal checks before allowing ERC20-quote launches.
     function factorySpecVersion() public pure override returns (string memory) {
         return "v2.3";
+    }
+
+    /// @inheritdoc IVaultFactoryDividendV23
+    /// @dev Fixed resolution: every launch through this factory pays dividends
+    /// via the pre-deployed IB-ASS basket (auto-unwraps to BABAB/TSMB/SKHYB).
+    /// predictedToken/launchParams unused - the basket is launch-independent.
+    function resolveDividendToken(address, uint8, bytes calldata)
+        external
+        view
+        override
+        returns (address)
+    {
+        return BASKET;
     }
 
     /// @inheritdoc VaultFactoryBaseV2
@@ -78,17 +94,19 @@ contract AssVaultFactory is VaultFactoryBaseV2 {
         if (d.quoteToken != REQUIRED_QUOTE) return (false, "quote token must be QQQB");
         if (d.buyTaxRate + d.sellTaxRate == 0) return (false, "a non-zero trade tax is required (the vault's only revenue source)");
         if (d.vaultBps == 0) return (false, "vaultBps must be > 0 (some tax share must reach the vault)");
-        if (d.dividendBps != 0) return (false, "dividendBps must be 0 (tracker-only mode; the distributor pushes rewards manually)");
+        if (d.dividendBps != 0) return (false, "dividendBps must be 0 (deposit-driven basket dividends)");
+        if (d.dividendToken != MAGIC_DIVIDEND_COMPUTED) {return (false, "dividendToken must be MAGIC_DIVIDEND_COMPUTED for this vault type.");}
         return (true, "");
     }
 
     /// @dev informational mirror of _validateBeforeLaunch for the launch UI
     function tokenCreationPolicies() public pure override returns (FactoryPolicy[] memory p) {
-        p = new FactoryPolicy[](5);
+        p = new FactoryPolicy[](6);
         p[0] = FactoryPolicy("quoteToken", "eq", abi.encode(REQUIRED_QUOTE), "Quote token must be QQQB (Invesco QQQ Trust bStock).");
         p[1] = FactoryPolicy("buyTaxRate", "gte", abi.encode(uint256(0)), "Buy + sell tax must be non-zero in total - tax is the vault's only revenue source.");
         p[2] = FactoryPolicy("sellTaxRate", "gte", abi.encode(uint256(0)), "See buyTaxRate - at least one of the two taxes must be non-zero.");
         p[3] = FactoryPolicy("vaultBps", "gt", abi.encode(uint256(0)), "Some share of tax must route to the vault.");
         p[4] = FactoryPolicy("dividendBps", "eq", abi.encode(uint256(0)), "Dividends run in tracker-only mode; the vault's distributor pushes rewards each cycle.");
+        p[5] = FactoryPolicy("dividendToken", "eq", abi.encode(MAGIC_DIVIDEND_COMPUTED), "Dividend token must be set to MAGIC_DIVIDEND_COMPUTED. The factory will resolve the real LP token address on-chain.");
     }
 }

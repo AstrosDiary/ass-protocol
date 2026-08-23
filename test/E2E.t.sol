@@ -51,7 +51,8 @@ contract E2ETest is Test {
         vm.startPrank(deployer);
         AssVault impl = new AssVault();
         UpgradeableBeacon beacon = new UpgradeableBeacon(address(impl), deployer); // -> Guardian pre-audit
-        AssVaultFactory factory = new AssVaultFactory(address(beacon));
+        address basketStub = address(new MockBStock()); // factory pins a basket; E2E exercises the engine rail
+        AssVaultFactory factory = new AssVaultFactory(address(beacon), basketStub);
         vm.stopPrank();
 
         address predictedToken = makeAddr("assToken");
