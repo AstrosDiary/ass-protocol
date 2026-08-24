@@ -152,12 +152,14 @@ contract AssViews {
         c.excluded = IDividendViews(div).excludedFromDividends(h);
         c.claimableShares = IDividendViews(div).withdrawableDividendOf(h);
 
-        // claim preview: mirrors _unwrapFrom — pooled[i] * shares / totalSupply
+        // claim preview: mirrors _unwrapFrom — accounted[i] * shares / totalSupply
+        // (processed pool ONLY; unprocessed engine deliveries belong to the
+        // next mint and are never claimable — audit v3 finding 6)
         uint256 supply = basket.totalSupply();
         if (c.claimableShares != 0 && supply != 0) {
             for (uint256 i; i < n; ++i) {
                 c.claimAmountsRaw[i] =
-                    Math.mulDiv(IERC20(c.assets[i]).balanceOf(address(basket)), c.claimableShares, supply);
+                    Math.mulDiv(basket.accounted(c.assets[i]), c.claimableShares, supply);
             }
         }
     }

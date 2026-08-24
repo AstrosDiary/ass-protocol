@@ -1,117 +1,110 @@
-# $ASS Protocol — Flap Vault Audit Package (v2 — post-feedback addendum)
+# $ASS Protocol — Flap Vault Audit Package (v3 — basket migration per reviewer guidance)
 
 **Asian Stock Strategy ($ASS)** — a Flap Tax Token V3 (QQQB-quoted) whose custom
-vault converts trading-tax revenue (QQQB) into a basket of Binance bStocks
-(BABAB, TSMB, SKHYB) automatically distributed pro-rata to eligible holders.
+vault pipeline converts trading-tax revenue into a basket of Binance bStocks
+(BABAB, TSMB, SKHYB) credited automatically to eligible holders and claimable
+on demand.
 
-## v2 changes (audit feedback, all implemented)
+## v3: both review items implemented exactly as recommended
 
-1. **Upgrade authority → Guardian.** Vault beacon ownership transferred to the
-   official BSC Guardian. All four satellites redeployed as BeaconProxies with
-   their beacons **constructed Guardian-owned** (no transfer step to trust).
-2. **onlyOwnerOrGuardian** on every admin/rescue function of Engine, Executor,
-   Distributor, and TriggerAdapter (Guardian as parallel emergency caller;
-   day-to-day ownership unchanged). Vault already carried the AccessControl
-   equivalent per VaultBase mandate.
-3. **Satellites upgradeable.** Engine, Executor, Distributor, TriggerAdapter
-   each: implementation + Guardian-owned UpgradeableBeacon + BeaconProxy.
-   Initializer pattern throughout (`_disableInitializers` on impls; all
-   former declaration-site defaults moved into `initialize()`).
-4. **Flap Trigger Service integration** (new `AssTriggerAdapter`) — swap
-   pipeline fully automated; details below.
-5. **maxSpendPerBuy reduced to 0.5 QQQB** per feedback.
+**1. Mainnet-fork test coverage** — new `test/MainnetFork.t.sol` (runs under
+`FORK_RPC_URL`): live Atlas Oracle reads from a contract call-frame for all
+three feeds (freshness asserted), Flap Dividend reference semantics verified
+against the live ElonCoin deployment (dividendToken wiring, setShare gating,
+permissionless withdraw surface), Trigger Service fee/gas-cap reads, V3 TWAP
+against the real QQQB pool, and our basket's NAV math against the real oracle.
 
-## Deployed contracts (BSC mainnet, all verified)
+**2. Centralization of Snapshot → Holder Submission → Payout — ELIMINATED by
+adopting the recommended basket-token pattern** (docs: basket-token-multi-asset-
+dividends), following the reference deployment (IB-ElonCoin) verified on-chain:
 
-| Contract | Proxy | Beacon (owner: Guardian) |
+- **AssDistributor and its keeper role are GONE from the money path.** No
+  snapshots, no holder submission, no off-chain indexing, no payout cycles, no
+  privileged payout functions for anyone — owner or Guardian.
+- **Flap's own Dividend contract does all share accounting and claims** — the
+  same audited contract every Flap dividend token uses, updated on every
+  transfer via `setShare`. Entitlements accrue instantly and proportionally at
+  deposit (MasterChef accumulator); claiming is fully permissionless self-serve
+  (`withdrawDividendsFor(user)`, callable by anyone for anyone).
+- **New `AssBasket` (IB-ASS)** implements the tutorial's index-basket token:
+  oracle-NAV proportional minting (Atlas push feeds, staleness-bounded,
+  BEP-677 multiplier-aware), MINIMUM_LIQUIDITY ratio lock, and the
+  `_transfer`-hook auto-unwrap — a claim burns the shares and delivers the
+  underlying bStocks pro-rata straight to the holder's wallet in the same
+  transaction. Holders never see or hold the basket token.
+- **Launch wiring is fully automatic**: the factory implements v2.3
+  `resolveDividendToken` (returns the basket); the UI passes
+  MAGIC_DIVIDEND_COMPUTED and the portal wires the Dividend to the basket
+  inside the launch transaction itself — proven live (see exhibits).
+- `processReceived()` (mint + deposit) is **permissionless**; the Trigger
+  adapter pokes it each cycle but nobody is trust-critical to distribution.
+
+## Deployed contracts (BSC mainnet, all verified, proxies linked)
+
+| Contract | Proxy | Beacon (owner: Flap Guardian) |
 |---|---|---|
-| AssEngine | `0x91c396376ee37f99e6aa34b59a3a055d98de7eb4` | `0x24F63159f84D75E89cb8B111B3d38513173222c7` |
-| AssSwapExecutor | `0xaeac4478fd937700861a5af6067907248ddd2892` | `0xF9BA4B17148a4592bd3e07784486983cc2fc7Fa1` |
-| AssDistributor | `0x032f8b7220c4cfab5b2d888855ae0a7b55400550` | `0x31103d437e35555be7fcc88E415A1BE576F78a5a` |
-| AssTriggerAdapter | `0xe6d45e3b88e79d33c4b19b0c1877777b09829918` | `0x4012Ab06f7476EbE0Bb4e6D71946C5632e5f2218` |
+| AssBasket (IB-ASS) | `0xd2742cE3e18C860248382E99326D025EBf316824` | `0xc87e8f9bE6248E31Dd8412539f6095dB4882319e` |
+| AssEngine | `0x3182F228618797D6c08b2f3B32114B9F6F0253b9` | `0x22c5Ff5860cCfd885347e2daf89E6F0fBC9f6EAd` |
+| AssSwapExecutor | `0x7ed322Ac2Ff5c1B4b3843ba00a30ee943E67FA3f` | `0x8ca1d98A4327fA40f35Bf18A787edCFb749c607E` |
+| AssTriggerAdapter | `0xBB4c75246BF68483303aAEf3911260447254676A` | `0x81C6C07E0c4d2cC8B872F0Ec3C8C650b42274085` |
+| AssVault implementation | `0xbc885dbB77Ebf2ed117f109b65F3728F3948e4B8` | beacon `0xD1909A198abE8692D472442d7179590bC6892bA6` |
+| AssVaultFactory (v2.3, computed dividend) | `0xd1096d1886e6034c63b4b621D268eE6AE201D1f0` | — |
 
-| Vault stack | Address |
-|---|---|
-| AssVault implementation | `<VAULT_IMPL>` |
-| Vault beacon (owner: Guardian) | `<VAULT_BEACON>` |
-| AssVaultFactory (v2.3) | `<FACTORY>` |
+(AssDistributor remains in the repo for history and is deployed-unwired at
+`0xf576949E8D7CAd44bd1E85B6Abf0831318b4e16d`; nothing references it.)
 
-(BscScan proxy linking done — Read/Write-as-Proxy resolves to the
-implementations on all four satellite proxies.)
+## Revenue flow (all on-chain, no keeper in the money path)
 
-## Architecture & revenue flow
-
-TRADE ($ASS) → 3% tax (QQQB) → **AssVault** (BeaconProxy, spec V3) →
-`release()` → **AssEngine** (weight-split budgets, 1% automation-gas skim) →
-TWAP-priced buys via **AssSwapExecutor** (allowlisted router) → bStocks land in
-**AssDistributor** → paginated snapshot/payout cycles pay holders per Flap
-Dividend tracker shares. Cycle cadence + buys driven by **AssTriggerAdapter**
-through the Flap Trigger Service; the manual keeper retains every role as a
-full fallback.
-
-- **AssVault** — minimal audited surface. Holds ONLY QQQB. VaultBaseV3:
-  balance-delta accounting (`accountedQuote`), `receive()` ping target (native
-  value reverts), permissionless `sync()`, `release()` operator-gated with
-  fixed destination (engine).
-- **AssVaultFactory** — spec v2.3, BeaconProxy deployer, UI-launchable by any
-  team. `onBeforeLaunch` pins: quote == QQQB, non-zero total trade tax,
-  vaultBps > 0, dividendBps == 0 (tracker-only), TOKEN_TAXED_V3.
-- **AssEngine** — splits released QQQB into per-asset budgets by weight bps
-  (processing takes balance-minus-earmarked; re-processing can never
-  double-count; cumulative counts allocated only). Optional gas skim
-  (`gasFundBps`, hard-capped 3%, currently 1%) funds the adapter's fee tank
-  from tax revenue. Keeper role = timing + routes only; failed buys are
-  isolated (try/catch self-call) and budgets carry forward.
-- **AssSwapExecutor** — validates calldata by invariant, not content:
-  allowlisted router, exact approve + reset, zero native value, output
-  measured as own balance delta vs raw-unit minOut, fixed recipient
-  (distributor), deadline fence.
-- **AssDistributor** — INDEX-pattern paginated cycles. Keeper submits
-  ADDRESSES only (strictly ascending); shares read LIVE from the Flap tracker
-  at submit AND payout — pays min(snapshot, live). Coverage >= 90% of tracker
-  totalShares or finalize reverts. Dust accrues + auto-flushes; failed
-  transfers re-accrue; registered assets never sweepable.
-- **AssTriggerAdapter** — ITriggerReceiver per the integration requirements:
-  mandatory sender check; requestId → action binding consumed on execute (no
-  replay); LIVE re-validation inside every callback (delay-aware); reentrancy
-  guard; per-asset BUY callbacks sized well under the gas cap; minOut from
-  Pancake V3 TWAP (vendored canonical FullMath/TickMath/consult, configurable
-  window + slippage). **Fail-soft doctrine: the callback never reverts** —
-  unmet conditions skip with events; a drained fee tank emits FundingLow and
-  automation lapses to the manual keeper, never halting revenue. Fee tank
-  funded from the engine skim via TWAP-bounded QQQB→WBNB→BNB conversion.
-  Documented exception: the WBNB `withdraw` in the top-up leg is not
-  soft-wrapped — canonical WBNB backs a just-received balance 1:1, so the
-  revert path exists only against a non-canonical WBNB.
-  Distribution cycles remain keeper-driven: the holder set is indexed
-  off-chain from share events and is not computable inside a callback.
+TRADE ($ASS) → 3% tax (QQQB) → **AssVault** → `release()` → **AssEngine**
+(weight-split budgets; configured 1% gas skim — hard-capped at 3% in code —
+self-funds automation) → TWAP-bounded
+buys via **AssSwapExecutor** → bStocks pool in **AssBasket** →
+`processReceived()` NAV-mints IB-ASS shares + deposits into **Flap Dividend**
+→ every eligible holder credited instantly → claim (self or on-behalf)
+auto-unwraps to BABAB/TSMB/SKHYB in the wallet. Cycles driven by
+**AssTriggerAdapter** on the Flap Trigger Service; fail-soft throughout; a
+manual keeper fallback exists for engine timing only and can never touch
+entitlements.
 
 ## Trust model
 
-- Owner (deployer, later multisig): asset registration/weights, router
-  allowlist, keeper mgmt, thresholds, adapter params/routes. Cannot touch
-  holder funds or basket assets.
-- Keeper (manual fallback + adapter): timing + route selection only. Every
-  economically meaningful value is computed or verified on-chain.
-- Flap Guardian: beacon upgrade authority on vault + all four satellites;
-  parallel emergency caller on all satellite admin; irrevocable vault roles.
-- Flap Trigger Service: schedules callbacks only — the adapter re-validates
-  everything and trusts nothing about timing.
+- Owner (launcher EOA, later multisig): asset weights, router allowlist,
+  thresholds, adapter routes/params. Cannot touch holder funds, pooled basket
+  assets, or entitlements. Adapter fund sweeps (owner/Guardian) touch only the
+  adapter's own gas tank — the BNB seed and fee skim — never user funds,
+  pooled basket assets, or entitlements; a pause-gate on sweeps is queued for
+  the next adapter implementation.
+- Flap Guardian: beacon upgrade authority on all six beacons; parallel
+  emergency caller (`onlyOwnerOrGuardian`) on satellite admin.
+- Flap Dividend: sole authority on shares and claims (native, audited).
+- Flap Trigger Service: scheduling only; every callback re-validates live.
 
 ## Tests
 
-`forge test` — **64 tests / 6 suites, all green**: unit (vault+factory
-pinning incl. V3 ping/balance-delta, engine/executor failure isolation,
-distributor ledger laws), fuzz (weight splits), invariants (solvency,
-conservation), full E2E (tax → release → process → 4-asset buys incl.
-router-down carry-forward/catch-up → 3000-holder paginated cycle →
-multiplier shift mid-pipeline), and a dedicated Trigger integration suite
-against a faithful service mock (sender check, replay protection, delay-aware
-re-validation, fail-soft paths incl. vault-revert and TWAP-unavailable,
-owner-loud/callback-soft funding split, fee-tank top-up, skim accounting,
-initializer locks, guardian authority). BEP-677: all accounting raw units.
+`forge test` — **91 tests, all green**: vault/factory pinning (incl. v2.3
+resolver + sentinel validation), engine/executor isolation, basket suite
+(NAV mint math incl. price-move proportionality and BEP-677 scaling, staleness
+reverts, deposit gates against a source-faithful Flap Dividend mock,
+auto-unwrap pro-rata, **processed-pool-only claim basis**, **post-drain
+recovery**), Trigger integration suite (sender check, replay, delay-aware
+re-validation, fail-soft paths, strict router-calldata decode), fuzz +
+invariants + E2E. Plus the mainnet-fork suite (item 1) under `FORK_RPC_URL`.
+
+## Staging validation (mainnet, throwaway launches through this exact stack lineage)
+
+Three full rehearsals culminating in: UI launch → portal resolved the basket
+into the Dividend **in the launch tx** → autonomous Trigger cycles (release,
+process, buys, mint, deposit; gas tank self-refueled from the skim) →
+multi-holder pro-rata claims through the production web UI delivering all
+three bStocks in one transaction. Two implementation bugs were found by
+rehearsal and fixed with regression tests before this final stack: (a) claims
+now pay strictly from the processed pool (an early claimer could previously
+sweep not-yet-minted deposits); (b) share pricing recovers at parity after a
+full pool drain (previously could deadlock minting against residual supply).
+The final stack carries both fixes; happy to share tx-level exhibits.
 
 ## Build
 
-Foundry, solc 0.8.26. OpenZeppelin v5.7.0 (contracts + upgradeable, aligned).
-`remappings.txt` included; deps via forge install.
+Foundry, solc 0.8.26. OpenZeppelin v5.7.0 (contracts + upgradeable). Vendored:
+Flap factory/vault interfaces, Atlas `IPriceHub` (BUSL-1.1 header retained).
+`remappings.txt` included.
