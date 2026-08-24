@@ -1,7 +1,7 @@
 "use client";
-import { useReadContract, useReadContracts } from "wagmi";
-import { useQuery } from "@tanstack/react-query";
-import { ERC20_ABI, TRACKER_ABI, ADDR, VIEWS_ABI, STOCKS, INDEXER } from "./ass";
+import { useReadContract, useReadContracts, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ERC20_ABI, DIVIDEND_ABI, ADDR, VIEWS_ABI, STOCKS, INDEXER } from "./ass";
 
 /* ---------- on-chain (AssViews = source of truth) ---------- */
 
@@ -32,13 +32,33 @@ export function useWallet(address?: `0x${string}`) {
     contracts: address ? [
       ...STOCKS.map((s) => ({ address: s.address, abi: ERC20_ABI, functionName: "balanceOf" as const, args: [address] as const })),
       { address: ADDR.token, abi: ERC20_ABI, functionName: "balanceOf" as const, args: [address] as const },
-      { address: ADDR.tracker, abi: TRACKER_ABI, functionName: "userInfo" as const, args: [address] as const },
-      { address: ADDR.tracker, abi: TRACKER_ABI, functionName: "minimumShareBalance" as const },
+      { address: ADDR.dividend, abi: DIVIDEND_ABI, functionName: "userInfo" as const, args: [address] as const },
+      { address: ADDR.dividend, abi: DIVIDEND_ABI, functionName: "minimumShareBalance" as const },
     ] : [],
     query: { enabled: !!address, refetchInterval: 30_000 },
   });
 }
 
+/** claim = Dividend.withdrawDividendsFor(self) — burns basket shares, unwraps
+ *  the three bStocks straight into the wallet in one tx */
+export function useClaim(address?: `0x${string}`) {
+  const qc = useQueryClient();
+  const { writeContract, data: txHash, isPending: signing, error, reset } = useWriteContract();
+  const { isLoading: mining, isSuccess } = useWaitForTransactionReceipt({
+    hash: txHash,
+    query: { enabled: !!txHash },
+  });
+  const claim = () => address && writeContract({
+    address: ADDR.dividend, abi: DIVIDEND_ABI,
+    functionName: "withdrawDividendsFor", args: [address],
+    gas: 600_000n,
+  });
+  // settle: refresh every on-chain read (claimable -> 0, wallet balances jump)
+  if (isSuccess) setTimeout(() => qc.invalidateQueries(), 0);
+  return { claim, signing, mining, isSuccess, txHash, error, reset };
+}
+
+/*
 export function useHolderHistory(address?: `0x${string}`) {
   return useQuery({
     queryKey: ["idx-holder", address],
@@ -48,6 +68,7 @@ export function useHolderHistory(address?: `0x${string}`) {
     enabled: !!INDEXER && !!address, refetchInterval: 30_000,
   });
 }
+  */
 
 /* ---------- market data (Dexscreener; null until pairs exist) ---------- */
 

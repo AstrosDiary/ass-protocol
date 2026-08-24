@@ -8,6 +8,9 @@ contract MockBStock is ERC20 {
     mapping(address => bool) public restricted; // reverts on transfer TO these
     mapping(address => bool) public softFail;   // returns false instead (non-reverter)
     bool public paused;                         // corporate-action processing window
+    // lens-stub surface: lets MockBStock stand in as a pre-wiring AssBasket
+    address public taxToken;                       // 0x0 -> views report pre-wiring shape
+    mapping(address => uint256) public accounted;  // 0 -> unprocessedRaw = full balance
 
     constructor() ERC20("Mock bStock", "MBS") {}
 

@@ -6,6 +6,7 @@ import { STOCKS, ADDR, fmtUnits, formatBStockAmount } from "@/lib/ass";
 import { useProtocolStats, useAssetCards, useMarkets, usd, pct } from "@/lib/hooks";
 import { WhyAss } from "@/components/WhyAss";
 import { Download } from "lucide-react";
+import { X_URL } from "@/lib/ass";
 
 const GALLERY_SRC = [
   "/brand/gallery1.png", "/brand/my-desk.png", "/brand/asia-desk.png", "/brand/gallery2.png",
@@ -26,7 +27,7 @@ export default function Home() {
       const card = cards.find((c) => c.asset.toLowerCase() === s.address.toLowerCase());
       const p = markets.stocks[s.symbol]?.priceUsd;
       if (!card || p == null) return null;
-      sum += Number(formatBStockAmount(card.cumulativeDistributedRaw).replace(/,/g, "")) * p;
+      sum += Number(formatBStockAmount(card.cumulativeBoughtRaw).replace(/,/g, "")) * p;
     }
     return sum;
   })();
@@ -62,6 +63,12 @@ export default function Home() {
               className="rounded-lg border border-warm-white/15 bg-deep-navy/80 px-6 py-3 font-display font-bold text-warm-white transition-colors hover:border-lavender/50">
               {t("cta2")}
             </Link>
+            <a href={X_URL} target="_blank" rel="noreferrer" aria-label="Follow on X"
+              className="flex items-center rounded-lg border border-warm-white/15 bg-deep-navy/80 px-4 py-3 text-warm-white transition-colors hover:border-lavender/50">
+              <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5" aria-hidden>
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+              </svg>
+            </a>
           </div>
 
           <div className="mt-12 grid max-w-2xl grid-cols-2 gap-px overflow-hidden rounded-xl border border-warm-white/10 bg-warm-white/10 md:grid-cols-4">

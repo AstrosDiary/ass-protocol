@@ -198,12 +198,19 @@ contract AssBasket is Initializable, OwnableUpgradeable, ERC20Upgradeable, Reent
             uint256 shares;
             if (supplyBefore == 0) {
                 require(depositValue > MINIMUM_LIQUIDITY, "seed too small");
-                _mint(DEAD, MINIMUM_LIQUIDITY);            // tutorial: lock the ratio forever
+                _mint(DEAD, MINIMUM_LIQUIDITY);            // FLAP tutorial: lock the ratio forever
                 shares = depositValue - MINIMUM_LIQUIDITY;
                 supplyBefore = MINIMUM_LIQUIDITY;
                 navBefore = 0;
+            } else if (navBefore == 0) {
+                // RECOVERY: processed pool fully claimed out while residual
+                // supply (dead seed + accumulator dust) remains. Re-seed at
+                // parity (1e18 shares per USD); the residue dilutes to ~nothing,
+                // which is its intended worth. Without this branch the basket
+                // deadlocks: shares would compute 0 forever (incident 2026-08-23).
+                shares = depositValue;
             } else {
-                shares = navBefore == 0 ? 0 : Math.mulDiv(depositValue, supplyBefore, navBefore);
+                shares = Math.mulDiv(depositValue, supplyBefore, navBefore);
             }
             if (shares == 0) { accounted[asset] = bal; continue; } // dust: absorbed into NAV (enriches holders)
             _mint(address(this), shares);
@@ -250,13 +257,12 @@ contract AssBasket is Initializable, OwnableUpgradeable, ERC20Upgradeable, Reent
         _burn(from, shares); // reverts if the dividend contract lacks the balance
         for (uint256 i; i < len; ++i) {
             address asset = _subset[i];
-            uint256 pooled = IERC20(asset).balanceOf(address(this));
-            uint256 amt = Math.mulDiv(pooled, shares, supplyBefore);
+            uint256 processedPool = accounted[asset];   // NEVER the raw balance:
+            // unprocessed engine deliveries belong to the next mint, not to claimers
+            uint256 amt = Math.mulDiv(processedPool, shares, supplyBefore);
             if (amt != 0) {
                 IERC20(asset).safeTransfer(to, amt);
-                // keep the processed baseline honest as assets leave the pool
-                uint256 acc = accounted[asset];
-                accounted[asset] = acc > amt ? acc - amt : 0;
+                accounted[asset] = processedPool - amt; // amt <= processedPool by construction
             }
             amounts[i] = amt;
         }

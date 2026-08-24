@@ -3,9 +3,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useAccount, useConnect } from "wagmi";
 import { STOCKS, fmtUnits, formatBStockAmount, shortAddr } from "@/lib/ass";
-import { useWallet, useHolderHistory, useHolderCard, useMarkets, usd, pct } from "@/lib/hooks";
-
-const stockBy = (a: string) => STOCKS.find((s) => s.address.toLowerCase() === a.toLowerCase());
+import { useWallet, useHolderCard, useAssetCards, useClaim, useMarkets, usd, pct } from "@/lib/hooks";
 
 export default function MyDesk() {
   const t = useTranslations("folio");
@@ -14,9 +12,10 @@ export default function MyDesk() {
   const { address, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
   const { data: w } = useWallet(mounted && isConnected ? address : undefined);
-  const { data: hist } = useHolderHistory(mounted && isConnected ? address : undefined);
   const { data: card } = useHolderCard(mounted && isConnected ? address : undefined);
+  const { data: cards } = useAssetCards();
   const { data: markets } = useMarkets();
+  const { claim, signing, mining, isSuccess, txHash, error } = useClaim(address);
 
   const connected = mounted && isConnected && address;
 
@@ -31,7 +30,7 @@ export default function MyDesk() {
           {t("connectCta")}
         </button>
         <div className="mt-10 grid gap-4 opacity-40 md:grid-cols-3">
-          {[t("kpiBasket"), t("kpiPosition"), t("kpiStatus")].map((l) => (
+          {[t("kpiClaimable"), t("kpiPosition"), t("kpiStatus")].map((l) => (
             <div key={l} className="rounded-xl border border-warm-white/10 bg-midnight p-5">
               <div className="text-[11px] tracking-widest text-muted-grey">{l}</div>
               <div className="mt-1.5 font-mono text-2xl text-warm-white">—</div>
@@ -43,22 +42,25 @@ export default function MyDesk() {
   }
 
   /* ---------- connected ---------- */
-  const stockBals = STOCKS.map((_, i) => (w?.[i]?.result as bigint | undefined) ?? null);
   const assBal = (w?.[3]?.result as bigint | undefined) ?? null;
   const share = (w?.[4]?.result as readonly [bigint, bigint, bigint] | undefined)?.[0] ?? null;
   const minShare = (w?.[5]?.result as bigint | undefined) ?? null;
   const eligible = share != null && share > 0n;
 
-  const basketUsd = (() => {
-    if (!markets) return null;
-    let sum = 0;
-    for (let i = 0; i < STOCKS.length; i++) {
-      const b = stockBals[i]; const p = markets.stocks[STOCKS[i].symbol]?.priceUsd;
-      if (b == null || p == null) return null;
-      sum += Number(formatBStockAmount(b).replace(/,/g, "")) * p;
-    }
-    return sum;
-  })();
+  const claimable = card?.claimableShares ?? null;           // 1e18-per-USD at accrual
+  const preview = STOCKS.map((s) => {
+    const i = card?.assets.findIndex((a) => a.toLowerCase() === s.address.toLowerCase()) ?? -1;
+    return i >= 0 ? (card!.claimAmountsRaw[i] as bigint) : null;
+  });
+  const oraclePrice = (addr: string): number | null => {
+    const c = cards?.find((x) => x.asset.toLowerCase() === addr.toLowerCase());
+    if (!c || c.priceUsd1e18 === 0n) return null;          // 0 = stale feed -> dash
+    return Number(c.priceUsd1e18) / 1e18;
+  };
+  const claimableUsd = claimable == null ? null
+    : Number(fmtUnits(claimable, 18, 6).replace(/,/g, ""));
+  const hasClaim = claimable != null && claimable > 0n;
+  const busy = signing || mining;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10">
@@ -79,7 +81,7 @@ export default function MyDesk() {
       {/* summary */}
       <div className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-warm-white/10 bg-warm-white/10 md:grid-cols-3">
         {[
-          { label: t("kpiBasket"), value: basketUsd == null ? "—" : usd(basketUsd) },
+          { label: t("kpiClaimable"), value: claimableUsd == null ? "—" : usd(claimableUsd) },
           { label: t("kpiPosition"), value: assBal != null ? fmtUnits(assBal) : "—" },
           { label: t("kpiWallet"), value: shortAddr(address) },
         ].map((k) => (
@@ -91,30 +93,31 @@ export default function MyDesk() {
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[60fr_40fr]">
-        {/* holdings */}
+        {/* claimable bStocks — the unwrap preview */}
         <div className="rounded-xl border border-warm-white/10 bg-midnight p-5">
-          <h2 className="font-display text-xs tracking-[0.25em] text-muted-grey">{t("holdingsTitle")}</h2>
+          <h2 className="font-display text-xs tracking-[0.25em] text-muted-grey">{t("claimableTitle")}</h2>
           <table className="mt-3 w-full font-mono text-sm tabular">
             <thead>
               <tr className="text-left text-[11px] tracking-widest text-muted-grey">
                 <th className="py-2 font-normal">{t("thAsset")}</th>
                 <th className="py-2 text-right font-normal">{t("thPrice")}</th>
                 <th className="py-2 text-right font-normal">{t("th24h")}</th>
-                <th className="py-2 text-right font-normal">{t("thHoldings")}</th>
+                <th className="py-2 text-right font-normal">{t("thClaimable")}</th>
                 <th className="py-2 text-right font-normal">{t("thValue")}</th>
               </tr>
             </thead>
             <tbody>
               {STOCKS.map((s, i) => {
                 const m = markets?.stocks[s.symbol];
-                const b = stockBals[i];
-                const v = b != null && m?.priceUsd != null
-                  ? Number(formatBStockAmount(b).replace(/,/g, "")) * m.priceUsd : null;
+                const p = oraclePrice(s.address) ?? m?.priceUsd ?? null; // oracle first, dex fallback
+                const b = preview[i];
+                const v = b != null && p != null
+                  ? Number(formatBStockAmount(b).replace(/,/g, "")) * p : null;
                 return (
                   <tr key={s.symbol} className="border-t border-warm-white/5">
                     <td className="py-3"><span className="text-warm-white">{s.symbol}</span>
                       <span className="ml-2 hidden text-xs text-muted-grey md:inline">{s.name}</span></td>
-                    <td className="py-3 text-right text-warm-white/85">{usd(m?.priceUsd ?? null)}</td>
+                    <td className="py-3 text-right text-warm-white/85">{usd(p)}</td>
                     <td className={`py-3 text-right ${m?.change24h == null ? "text-muted-grey" : m.change24h >= 0 ? "text-gain" : "text-loss"}`}>
                       {m?.change24h == null ? "—" : pct(m.change24h)}</td>
                     <td className="py-3 text-right text-warm-white/85">{b != null ? formatBStockAmount(b) : "—"}</td>
@@ -122,35 +125,46 @@ export default function MyDesk() {
                   </tr>
                 );
               })}
-            </tbody>
+            </tbody>          
           </table>
-          {card && card.accruedRaw.some((a) => a > 0n) && (
-            <p className="mt-3 font-mono text-xs text-muted-grey">
-              {t("dust")}:{" "}
-              {STOCKS.map((s, i) => card.accruedRaw[i] > 0n ? `${s.symbol} ${formatBStockAmount(card.accruedRaw[i])}` : null)
-                .filter(Boolean).join(" · ")}
-            </p>
-          )}
+          <p className="mt-3 font-mono text-xs text-muted-grey">{t("claimableNote")}</p>
         </div>
 
-        {/* accrual activity */}
+        {/* claim panel (replaces accrual feed, same box) */}
         <div className="rounded-md border border-term-border bg-term-bg p-5">
-          <h2 className="font-mono text-xs tracking-[0.25em] text-term-dim">{t("activityTitle")}</h2>
-          <div className="mt-3 space-y-1.5 font-mono text-[13px] tabular">
-            {hist?.paid?.length ? hist.paid.slice(0, 14).map((p) => {
-              const s = stockBy(p.asset);
-              return (
-                <a key={p.tx + p.asset + p.ts} href={`https://bscscan.com/tx/${p.tx}`} target="_blank" rel="noreferrer"
-                  className="flex items-center justify-between rounded px-2 py-1.5 transition-colors hover:bg-warm-white/5">
-                  <span className="text-term-dim">{new Date(p.ts * 1000).toISOString().slice(5, 16).replace("T", " ")}</span>
-                  <span className="text-lavender">ACCRUED</span>
-                  <span className="text-warm-white">{s?.symbol ?? shortAddr(p.asset)}</span>
-                  <span className="text-gain">+{formatBStockAmount(BigInt(p.amount))}</span>
-                </a>
-              );
-            }) : (
-              <div className="py-8 text-center text-xs tracking-widest text-term-dim">{t("activityEmpty")}</div>
+          <h2 className="font-mono text-xs tracking-[0.25em] text-term-dim">{t("claimTitle")}</h2>
+          <div className="mt-4 font-mono">
+            <div className="text-[11px] tracking-widest text-term-dim">{t("claimAvailable")}</div>
+            <div className="mt-1 text-3xl text-warm-white tabular">
+              {claimableUsd == null ? "—" : usd(claimableUsd)}
+            </div>
+            <div className="mt-1 text-xs text-term-dim">{t("claimAtAccrual")}</div>
+
+            <button
+              onClick={() => claim()}
+              disabled={!hasClaim || busy}
+              className={`mt-5 w-full rounded-lg px-6 py-3 font-display text-cream transition-colors ${
+                hasClaim && !busy
+                  ? "cursor-pointer bg-deep-purple hover:bg-ass-purple"
+                  : "cursor-not-allowed bg-warm-white/10 text-muted-grey"}`}>
+              {signing ? t("claimSigning") : mining ? t("claimMining") : t("claimCta")}
+            </button>
+
+            {isSuccess && txHash && (
+              <a href={`https://bscscan.com/tx/${txHash}`} target="_blank" rel="noreferrer"
+                className="mt-3 block text-center text-xs text-gain hover:underline">
+                {t("claimDone")} ↗
+              </a>
             )}
+            {error && (
+              <p className="mt-3 text-center text-xs text-loss">{t("claimError")}</p>
+            )}
+            {!hasClaim && !busy && !isSuccess && (
+              <p className="mt-3 text-center text-xs tracking-widest text-term-dim">{t("claimEmpty")}</p>
+            )}
+            <p className="mt-5 border-t border-term-border pt-3 text-[11px] leading-relaxed text-term-dim">
+              {t("claimExplainer")}
+            </p>
           </div>
         </div>
       </div>

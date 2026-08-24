@@ -8,14 +8,15 @@ const req = (v: string | undefined, name: string): Address => {
 export const ADDR = {
   token: req(process.env.NEXT_PUBLIC_TOKEN, "TOKEN"),
   vault: req(process.env.NEXT_PUBLIC_VAULT, "VAULT"),
-  tracker: req(process.env.NEXT_PUBLIC_TRACKER, "TRACKER"),
+  dividend: req(process.env.NEXT_PUBLIC_DIVIDEND, "DIVIDEND"),   // Flap Dividend: shares + claims (replaces tracker+distributor)
   engine: req(process.env.NEXT_PUBLIC_ENGINE, "ENGINE"),
-  distributor: req(process.env.NEXT_PUBLIC_DISTRIBUTOR, "DISTRIBUTOR"),
+  basket: req(process.env.NEXT_PUBLIC_BASKET, "BASKET"),
   views: req(process.env.NEXT_PUBLIC_VIEWS, "VIEWS"),
 } as const;
 
 export const RPC = process.env.NEXT_PUBLIC_BSC_RPC ?? "https://bsc-dataseed.bnbchain.org";
 export const INDEXER = process.env.NEXT_PUBLIC_INDEXER_URL || null;
+export const X_URL = "https://x.com/AsianStockStrat";   // fill handle
 
 /** quote token: QQQB (Invesco QQQ Trust bStock) — the pairing + tax currency */
 export const QQQB = "0x205812CdBed920aFf76C6580abD681a46D11efc7" as Address;
@@ -32,18 +33,21 @@ export const STOCKS = [
 
 export const VIEWS_ABI = parseAbi([
   "function VERSION() view returns (string)",
-  "struct ProtocolStats { uint256 vaultTotalReceivedQuote; uint256 vaultTotalReleasedQuote; uint256 vaultPendingQuote; uint256 engineUnallocatedQuote; uint256 cumulativeQuoteProcessed; uint256 trackerTotalShares; uint256 trackerMinimumShare; uint8 distributorPhase; uint64 currentCycleId; uint256 assetCount; }",
-  "struct AssetCard { address asset; bool enabledEngine; bool enabledDistributor; uint16 weightBps; uint128 maxSpendPerBuy; uint256 budgetQuote; uint256 cumulativeSpentQuote; uint256 cumulativeBoughtRaw; uint256 cumulativeDistributedRaw; uint256 distributorBalanceRaw; uint256 reservedForAccruedRaw; uint256 minPayoutRaw; }",
-  "struct HolderCard { uint256 trackerShare; bool excluded; uint256[] accruedRaw; }",
+  "struct ProtocolStats { uint256 vaultTotalReceivedQuote; uint256 vaultTotalReleasedQuote; uint256 vaultPendingQuote; uint256 engineUnallocatedQuote; uint256 cumulativeQuoteProcessed; uint256 basketNavUsd1e18; uint256 basketTotalSupply; uint256 sharesAtDividend; uint256 divTotalShares; uint256 divMinimumShare; uint256 totalDividendsDistributed; uint256 assetCount; address dividendContract_; }",
+  "struct AssetCard { address asset; bool enabledEngine; uint16 weightBps; uint128 maxSpendPerBuy; uint256 budgetQuote; uint256 cumulativeSpentQuote; uint256 cumulativeBoughtRaw; uint256 pooledRaw; uint256 unprocessedRaw; uint256 priceUsd1e18; }",
+  "struct HolderCard { uint256 share; bool excluded; uint256 claimableShares; address[] assets; uint256[] claimAmountsRaw; }",
   "function protocolStats() view returns (ProtocolStats)",
   "function assetCards() view returns (AssetCard[])",
   "function holderCard(address h) view returns (HolderCard)",
+  "function dividendContract() view returns (address)",
 ]);
 
-export const TRACKER_ABI = parseAbi([
+export const DIVIDEND_ABI = parseAbi([
   "function userInfo(address) view returns (uint256 share, uint256 rewardDebt, uint256 pending)",
   "function totalShares() view returns (uint256)",
   "function minimumShareBalance() view returns (uint256)",
+  "function withdrawableDividendOf(address) view returns (uint256)",
+  "function withdrawDividendsFor(address user) returns (bool)",
 ]);
 
 export const ERC20_ABI = parseAbi([

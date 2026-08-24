@@ -115,7 +115,7 @@ export function WhyAss() {
               {p.label}
             </button>
           ))}
-          <a href={`https://bscscan.com/address/${ADDR.distributor}`} target="_blank" rel="noreferrer"
+          <a href={`https://bscscan.com/address/${ADDR.basket}`} target="_blank" rel="noreferrer"
             className="font-mono text-xs tracking-widest text-lavender transition-colors hover:text-violet">
             {t("viewContracts")} ↗
           </a>

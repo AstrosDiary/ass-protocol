@@ -20,6 +20,10 @@ interface IWBNBMinimal {
     function balanceOf(address) external view returns (uint256);
 }
 
+interface IProcessable {
+    function processReceived() external returns (uint256);
+}
+
 /// @title AssTriggerAdapter — Flap Trigger Service automation for the $ASS swap pipeline
 /// @notice Self-perpetuating cycle: a CYCLE trigger releases vault revenue,
 /// processes it into budgets, spawns one capped BUY trigger per fundable asset,
@@ -46,6 +50,11 @@ contract AssTriggerAdapter is Initializable, OwnableUpgradeable, ReentrancyGuard
     IAssVaultOps public vault;          // set post-launch via setVault
     IERC20 public quote;                // QQQB
     address public wbnb;
+
+    /// @dev SmartRouter exactInput takes ONE struct argument; encoding it as
+    /// flat args drops the tuple's leading offset word and the router reverts
+    /// undecodable (incident: 12x RouterCallFailed(empty), 2026-08-22).
+    struct ExactInputParams { bytes path; address recipient; uint256 amountIn; uint256 amountOutMinimum; }
 
     struct Route { address[] pools; address[] tokens; bytes path; }
     mapping(address => Route) internal _routes;   // basket asset => QQQB->asset route
@@ -187,6 +196,15 @@ contract AssTriggerAdapter is Initializable, OwnableUpgradeable, ReentrancyGuard
 
     // ---------------------------------------------------------------- cycle step
     function _runCycle(uint256 requestId) internal {
+        // advance the basket: mint+deposit anything last cycle's buys delivered
+        // (permissionless on the basket; fail-soft here — NothingToProcess is
+        // the normal empty-cycle case). Code check: a call to a code-less
+        // address would "succeed" with empty returndata and the uint256 decode
+        // would revert in OUR frame, outside try/catch protection.
+        address basketDist = engine.distributor();
+        if (basketDist.code.length > 0) {
+            try IProcessable(basketDist).processReceived() {} catch {}
+        }
         _topUpGas();
 
         // release: re-validated live; unset vault = skip; vault reverts fail soft
@@ -251,9 +269,8 @@ contract AssTriggerAdapter is Initializable, OwnableUpgradeable, ReentrancyGuard
     }
 
     function _routerCalldata(bytes memory path, uint256 amountIn, uint256 minOut) internal view returns (bytes memory) {
-        // exactInput((bytes,address,uint256,uint256)) wrapped in multicall(deadline, [..])
         bytes memory inner = abi.encodeWithSelector(
-            0xb858183f, path, engine.executor(), amountIn, minOut
+            0xb858183f, ExactInputParams(path, address(engine.executor()), amountIn, minOut)
         );
         bytes[] memory calls = new bytes[](1);
         calls[0] = inner;
@@ -276,7 +293,7 @@ contract AssTriggerAdapter is Initializable, OwnableUpgradeable, ReentrancyGuard
         if (minOut == 0) return;
 
         quote.forceApprove(swapRouter, bal);
-        bytes memory inner = abi.encodeWithSelector(0xb858183f, g.path, address(this), bal, minOut);
+                bytes memory inner = abi.encodeWithSelector(0xb858183f, ExactInputParams(g.path, address(this), bal, minOut));
         bytes[] memory calls = new bytes[](1); calls[0] = inner;
         (bool ok,) = swapRouter.call(abi.encodeWithSelector(0x5ae401dc, block.timestamp + 600, calls));
         quote.forceApprove(swapRouter, 0);

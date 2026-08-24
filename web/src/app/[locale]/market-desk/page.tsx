@@ -22,7 +22,7 @@ export default function MarketDesk() {
       const c = cards.find((x) => x.asset.toLowerCase() === s.address.toLowerCase());
       const p = markets.stocks[s.symbol]?.priceUsd;
       if (!c || p == null) return null;
-      sum += Number(formatBStockAmount(c.cumulativeDistributedRaw).replace(/,/g, "")) * p;
+      sum += Number(formatBStockAmount(c.cumulativeBoughtRaw).replace(/,/g, "")) * p;
     }
     return sum;
   })();
@@ -155,7 +155,7 @@ export default function MarketDesk() {
                       {m?.change24h == null ? "—" : pct(m.change24h)}
                     </td>
                     <td className="py-2.5 text-right text-warm-white/85">{c ? formatBStockAmount(c.cumulativeBoughtRaw) : "—"}</td>
-                    <td className="py-2.5 text-right text-warm-white/85">{c ? formatBStockAmount(c.cumulativeDistributedRaw) : "—"}</td>
+                    <td className="py-2.5 text-right text-warm-white/85">{c ? formatBStockAmount(c.cumulativeBoughtRaw) : "—"}</td>
                   </tr>
                 );
               })}

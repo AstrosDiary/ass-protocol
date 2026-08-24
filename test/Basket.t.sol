@@ -262,4 +262,49 @@ contract BasketTest is Test {
         // ever sit at div/dead — assert supply location:
         assertEq(basket.balanceOf(address(div)) + basket.balanceOf(0x000000000000000000000000000000000000dEaD), basket.totalSupply());
     }
+
+    /// INCIDENT 2026-08-23 #1: claims must pay from the PROCESSED pool only.
+    /// Unprocessed engine deliveries sitting in the basket belong to the next
+    /// mint — an early claimer must not sweep them.
+    function test_Unwrap_IgnoresUnprocessedDeposits() public {
+        babab.mint(address(basket), 1e18);        // $160, processed
+        basket.processReceived();
+        tsmb.mint(address(basket), 1e18);         // $410 delivered, NOT yet poked
+
+        div.withdrawDividendsFor(h2);             // 75% claim lands mid-window
+        assertApproxEqRel(babab.balanceOf(h2), 0.75e18, 1e14); // gets processed BABAB
+        assertEq(tsmb.balanceOf(h2), 0);          // gets ZERO unprocessed TSMB
+        assertEq(tsmb.balanceOf(address(basket)), 1e18); // still pooled, intact
+
+        // the unprocessed delivery mints cleanly on the next poke...
+        uint256 minted = basket.processReceived();
+        assertGt(minted, 0);
+        // ...and is then claimable as normal
+        div.withdrawDividendsFor(h2);
+        assertGt(tsmb.balanceOf(h2), 0);
+    }
+
+    /// INCIDENT 2026-08-23 #2: after the processed pool is fully claimed out,
+    /// residual supply (dead seed + accumulator dust) must not deadlock minting.
+    /// Pre-fix this reverts NothingToProcess forever (shares compute 0 against
+    /// navBefore == 0); the recovery branch re-seeds at parity.
+    function test_Process_RecoversAfterFullDrain() public {
+        babab.mint(address(basket), 1e18);
+        basket.processReceived();
+        div.withdrawDividendsFor(h1);
+        div.withdrawDividendsFor(h2);             // processed pool fully drained
+        // dead-share pro-rata sliver correctly stays behind (the residue that
+        // backs the locked MINIMUM_LIQUIDITY supply) — dust-scale, never zero
+        assertLt(basket.accounted(address(babab)), 1e13);
+        assertGt(basket.totalSupply(), 0);        // dead seed + dust residue remains
+
+        babab.mint(address(basket), 2e18);        // next cycle's revenue arrives
+        uint256 minted = basket.processReceived(); // MUST NOT revert (the deadlock)
+        assertApproxEqRel(minted, 320e18, 1e12);  // parity re-seed: $320 -> ~320e18 shares
+        assertGt(div.withdrawableDividendOf(h2), 0); // machine is alive again
+        uint256 h2Before = babab.balanceOf(h2);   // still holds ~0.75e18 from the first-era claim
+        div.withdrawDividendsFor(h2);
+        // second claim delivers 75% of the NEW $320 pool (minus dead-share sliver)
+        assertApproxEqRel(babab.balanceOf(h2) - h2Before, 1.5e18, 1e13);
+    }
 }

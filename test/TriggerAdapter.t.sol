@@ -73,6 +73,17 @@ contract MockVaultOps {
     }
 }
 
+contract MockProcessable {
+    uint256 public calls;
+    bool public revertMode;
+    function setRevert(bool r) external { revertMode = r; }
+    function processReceived() external returns (uint256) {
+        if (revertMode) revert("NothingToProcess");
+        calls++;
+        return 1e18;
+    }
+}
+
 contract TriggerAdapterTest is Test {
     MockTriggerService svc;
     MockBStock qqqb;
@@ -192,6 +203,7 @@ contract TriggerAdapterTest is Test {
         _setRouteWithMockedTwap(100e18);
         qqqb.mint(address(vaultM), 2 ether);           // tax sitting in vault
         router.setPair(address(qqqb), address(babab));
+        router.setStrictDecode(true);
 
         uint256 cycleId = _scheduleCycle();
         assertTrue(svc.exec(cycleId));
@@ -341,5 +353,33 @@ contract TriggerAdapterTest is Test {
         (AssTriggerAdapter.Kind k,) = adapter.pending(id + 1);
         // with no route set, no BUY scheduled; paused => no CYCLE either
         assertEq(uint8(k), uint8(AssTriggerAdapter.Kind.NONE));
+    }
+
+    // ---------------- basket poke (post-migration cycle step)
+    /// CYCLE advances the basket (mint+deposit of delivered stocks) via the
+    /// engine's distributor pointer — permissionless on the basket, fail-soft
+    /// here: NothingToProcess (empty cycle) and pre-wiring reverts are normal.
+    function test_Cycle_PokesBasketProcessReceived() public {
+        MockProcessable basket = new MockProcessable();
+        vm.prank(owner);
+        engine.setDistributor(address(basket));
+
+        uint256 id = _scheduleCycle();
+        assertTrue(svc.exec(id));
+        assertEq(basket.calls(), 1);                    // poked exactly once per CYCLE
+    }
+
+    function test_Cycle_BasketPokeRevert_FailsSoft() public {
+        MockProcessable basket = new MockProcessable();
+        basket.setRevert(true);
+        vm.prank(owner);
+        engine.setDistributor(address(basket));
+
+        qqqb.mint(address(engine), 1 ether);
+        uint256 id = _scheduleCycle();
+        assertTrue(svc.exec(id));                       // callback survives the revert
+        assertGt(engine.budget(address(babab)), 0);     // rest of the cycle still ran
+        (AssTriggerAdapter.Kind k,) = adapter.pending(id + 1);
+        assertEq(uint8(k), uint8(AssTriggerAdapter.Kind.CYCLE)); // still re-armed (no route set -> no BUY)
     }
 }

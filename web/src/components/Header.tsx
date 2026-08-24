@@ -8,6 +8,7 @@ import { Menu, X } from "lucide-react";
 import { shortAddr, ADDR } from "@/lib/ass";
 import { useAppKit } from "@reown/appkit/react";
 import { HAS_APPKIT } from "@/lib/wagmi";
+import { X_URL } from "@/lib/ass";
 
 export function Header() {
   const path = usePathname(); // locale-stripped: "/market-desk" even on /zh/market-desk
@@ -43,6 +44,12 @@ export function Header() {
               {n.label}
             </Link>
           ))}
+          <a href={X_URL} target="_blank" rel="noreferrer" aria-label="Follow on X"
+            className="pb-1 text-muted-grey transition-colors hover:text-warm-white">
+            <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4" aria-hidden>
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+            </svg>
+          </a>
         </nav>
         <div className="flex items-center gap-2">
           <Link href={path} locale={locale === "en" ? "zh" : "en"}

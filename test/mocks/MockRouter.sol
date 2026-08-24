@@ -11,18 +11,39 @@ contract MockRouter {
     address public thief = address(0xBAD);
 
     // Adapter compatibility: the TriggerAdapter calls multicall(deadline, [exactInput(...)]).
-    // Decode just enough to service it: pull the allowance of `pairIn` from the
-    // caller, mint `pairOut` at `rate` to the caller. Configure per-test for
-    // whichever leg (bStock buy or gas top-up) the test exercises.
+    // Two service levels:
+    //  - permissive (default): pull pairIn by allowance, mint pairOut to caller —
+    //    calldata ignored. Kept for legs where encoding isn't under test.
+    //  - strictDecode: actually decode multicall + the exactInput STRUCT the way
+    //    the real SmartRouter does. Regression guard for the flat-args encoding
+    //    bug (incident: 12x RouterCallFailed(empty), 2026-08-22).
     address public pairIn; address public pairOut;
+    bool public strictDecode;
     function setPair(address in_, address out_) external { pairIn = in_; pairOut = out_; }
+    function setStrictDecode(bool s) external { strictDecode = s; }
 
-    fallback(bytes calldata) external returns (bytes memory) {
+    struct ExactInputParams { bytes path; address recipient; uint256 amountIn; uint256 amountOutMinimum; }
+
+    fallback(bytes calldata cd) external returns (bytes memory) {
         require(mode != Mode.Revert, "router: no route");
+        if (strictDecode) {
+            require(bytes4(cd[:4]) == bytes4(0x5ae401dc), "not multicall");
+            (, bytes[] memory calls) = abi.decode(cd[4:], (uint256, bytes[]));
+            require(bytes4(calls[0]) == bytes4(0xb858183f), "not exactInput");
+            ExactInputParams memory p = abi.decode(_stripSelector(calls[0]), (ExactInputParams));
+            IERC20(pairIn).transferFrom(msg.sender, address(this), p.amountIn);
+            MockBStock(pairOut).mint(p.recipient, p.amountIn * rate / 1e18);
+            return "";
+        }
         uint256 amountIn = IERC20(pairIn).allowance(msg.sender, address(this));
         IERC20(pairIn).transferFrom(msg.sender, address(this), amountIn);
         MockBStock(pairOut).mint(msg.sender, amountIn * rate / 1e18);
         return "";
+    }
+
+    function _stripSelector(bytes memory b) internal pure returns (bytes memory out) {
+        out = new bytes(b.length - 4);
+        for (uint256 i; i < out.length; ++i) out[i] = b[i + 4];
     }
 
     function setMode(Mode m) external { mode = m; }
