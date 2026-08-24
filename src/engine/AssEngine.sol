@@ -96,7 +96,7 @@ contract AssEngine is Initializable, OwnableUpgradeable, ReentrancyGuard {
         require(quote_ != address(0) && quote_.code.length > 0, "bad quote");
         __Ownable_init(owner_);
         quote = IERC20(quote_);
-        minProcessAmount = 0.05 ether; // proxy-safe default (declaration-site defaults don't run under proxies)
+        minProcessAmount = 0.025 ether; // proxy-safe default (declaration-site defaults don't run under proxies)
     }
 
     // ---------------------------------------------------------------- admin

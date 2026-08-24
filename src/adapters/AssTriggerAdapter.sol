@@ -165,8 +165,8 @@ contract AssTriggerAdapter is Initializable, OwnableUpgradeable, ReentrancyGuard
     }
 
     function setPaused(bool p) external onlyOwnerOrGuardian { paused = p; emit PausedSet(p); }
-    function sweepBnb(address to, uint256 amt) external onlyOwnerOrGuardian { (bool ok,) = to.call{value: amt}(""); require(ok); }
-    function sweepToken(address t, address to) external onlyOwnerOrGuardian { IERC20(t).safeTransfer(to, IERC20(t).balanceOf(address(this))); }
+    function sweepBnb(address to, uint256 amt) external onlyOwnerOrGuardian { (bool ok,) = to.call{value: amt}(""); require(ok); } // gas tank only
+    function sweepToken(address t, address to) external onlyOwnerOrGuardian { IERC20(t).safeTransfer(to, IERC20(t).balanceOf(address(this))); } // gas tank only
 
     /// @notice kick-start (or manually re-arm) the self-perpetuating cycle.
     /// @param delay seconds from now (0 = ASAP)
