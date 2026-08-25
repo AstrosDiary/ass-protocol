@@ -4,6 +4,7 @@ pragma solidity ^0.8.26;
 import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {VaultBaseV2} from "../flap/VaultBaseV2.sol";
 import {VaultUISchema, VaultMethodSchema, FieldDescriptor, ApproveAction} from "../flap/IVaultSchemasV1.sol";
@@ -18,7 +19,7 @@ import {VaultBaseV3} from "../flap/VaultBaseV3.sol";
 /// authority is transferred to the Flap Guardian per audit requirements.
 /// @dev The vault holds ONLY the quote token. 
 /// receive() is the V3 ping target; native value reverts.
-contract AssVault is Initializable, AccessControlUpgradeable, VaultBaseV3 {
+contract AssVault is Initializable, AccessControlUpgradeable, VaultBaseV3, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
@@ -42,6 +43,10 @@ contract AssVault is Initializable, AccessControlUpgradeable, VaultBaseV3 {
 
     error CannotRevokeGuardianRole();
     error NativeNotAccepted();
+    error Unauthorized();
+
+    // audit recommended action
+    event EmergencyWithdraw(address indexed token, address indexed to, uint256 amount);
 
     constructor() {
         _disableInitializers(); // implementation is inert; proxies initialize
@@ -209,5 +214,24 @@ contract AssVault is Initializable, AccessControlUpgradeable, VaultBaseV3 {
         // forge-lint: disable-next-line(unsafe-typecast)
         while (v != 0) { b[--d] = bytes1(uint8(48 + v % 10)); v /= 10; }
         return string(b);
+    }
+
+    /// @notice Rule-009 emergency controls — GUARDIAN ONLY (not owner/admin:
+    /// preserves the "operators cannot touch funds" trust model; the Guardian
+    /// is Flap's own emergency authority). Break-glass recovery for stray
+    /// native/tokens and catastrophic scenarios on a beacon-final vault.
+    function emergencyWithdrawNative(address to, uint256 amount) external nonReentrant {
+        if (msg.sender != _getGuardian()) revert Unauthorized();
+        (bool ok, ) = to.call{value: amount}("");
+        require(ok, "native send failed");
+        emit EmergencyWithdraw(address(0), to, amount);
+    }
+
+    function emergencyWithdrawToken(address token, address to, uint256 amount) external nonReentrant {
+        if (msg.sender != _getGuardian()) revert Unauthorized();
+        IERC20(token).safeTransfer(to, amount);
+        // note: no accounting re-baseline needed — all vault views derive
+        // directly from live QUOTE.balanceOf(this) + totalReleased
+        emit EmergencyWithdraw(token, to, amount);
     }
 }

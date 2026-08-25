@@ -258,7 +258,9 @@ contract TriggerAdapterTest is Test {
     function test_Cycle_NoBnb_OwnerRevertsLoud_CallbackLapsesSoft() public {
         // drain to exactly one fee: scheduling succeeds, but the tank is then empty
         vm.startPrank(owner);
+        adapter.setPaused(true);                        // sweeps are decommission-gated
         adapter.sweepBnb(owner, address(adapter).balance - svc.getFee());
+        adapter.setPaused(false);                       // resume live behavior
         uint256 id = adapter.scheduleCycle(0);
         vm.stopPrank();
 
@@ -293,8 +295,11 @@ contract TriggerAdapterTest is Test {
         // would consume vm.prank and sweepBnb would run unauthorized
         uint256 fee = svc.getFee();
         uint256 sweepAmt = address(adapter).balance - fee; // leave exactly one fee in the tank (below feeFloor)
-        vm.prank(owner);
+        vm.startPrank(owner);
+        adapter.setPaused(true);                        // sweeps are decommission-gated
         adapter.sweepBnb(owner, sweepAmt);
+        adapter.setPaused(false);                       // resume live behavior
+        vm.stopPrank();
 
         qqqb.mint(address(adapter), 1 ether);           // the skim
         vm.deal(address(wbnbM), 1 ether);               // wbnb can pay out withdrawals

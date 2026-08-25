@@ -129,7 +129,7 @@ contract AssBasket is Initializable, OwnableUpgradeable, ERC20Upgradeable, Reent
     }
 
     function setMaxFeedAge(uint256 age) external onlyOwnerOrGuardian {
-        require(age >= 5 minutes, "too tight");
+        require(age >= 5 minutes && age <= 24 hours, "out of bounds");
         maxFeedAge = age;
         emit MaxFeedAgeSet(age);
     }

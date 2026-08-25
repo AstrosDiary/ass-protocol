@@ -90,6 +90,7 @@ contract AssTriggerAdapter is Initializable, OwnableUpgradeable, ReentrancyGuard
     error LengthMismatch();
     error Unauthorized();
     error UnsupportedChain(uint256 chainId);
+    error NotPaused();
 
     // ---------------------------------------------------------- guardian mandate
     function _getGuardian() internal view returns (address) {
@@ -165,8 +166,17 @@ contract AssTriggerAdapter is Initializable, OwnableUpgradeable, ReentrancyGuard
     }
 
     function setPaused(bool p) external onlyOwnerOrGuardian { paused = p; emit PausedSet(p); }
-    function sweepBnb(address to, uint256 amt) external onlyOwnerOrGuardian { (bool ok,) = to.call{value: amt}(""); require(ok); } // gas tank only
-    function sweepToken(address t, address to) external onlyOwnerOrGuardian { IERC20(t).safeTransfer(to, IERC20(t).balanceOf(address(this))); } // gas tank only
+
+    function sweepBnb(address to, uint256 amt) external onlyOwnerOrGuardian {
+        if (!paused) revert NotPaused();               // decommission-only: live tank untouchable (audit r1-F4)
+        (bool ok,) = to.call{value: amt}("");
+        require(ok);
+    } // gas tank only
+
+    function sweepToken(address t, address to) external onlyOwnerOrGuardian {
+        if (!paused) revert NotPaused();               // decommission-only
+        IERC20(t).safeTransfer(to, IERC20(t).balanceOf(address(this)));
+    } // gas tank only
 
     /// @notice kick-start (or manually re-arm) the self-perpetuating cycle.
     /// @param delay seconds from now (0 = ASAP)
@@ -215,10 +225,12 @@ contract AssTriggerAdapter is Initializable, OwnableUpgradeable, ReentrancyGuard
         if (engine.unallocatedQuote() >= engine.minProcessAmount()) {
             try engine.processRevenue() {} catch { emit Skipped(requestId, "process failed"); }
         }
-        // spawn one BUY trigger per fundable, routed asset
+        // spawn one BUY trigger per fundable, routed, ENABLED asset
         uint256 n = engine.assetsCount();
         for (uint256 i; i < n && i < 8; ++i) {
             address a = engine.allAssets(i);
+            (, bool assetEnabled,,) = engine.assets(a);
+            if (!assetEnabled) continue; // never pay a trigger fee for a disabled asset (audit r4-F2)
             if (engine.budget(a) < buyMinQuote) continue;
             if (_routes[a].pools.length == 0) continue;
             uint256 fee = triggerService.getFee();
@@ -248,7 +260,8 @@ contract AssTriggerAdapter is Initializable, OwnableUpgradeable, ReentrancyGuard
         Route memory r = _routes[asset];
         if (r.pools.length == 0) { emit Skipped(requestId, "no route"); return; }
         uint256 spend = engine.budget(asset);           // re-validate LIVE (delay-aware)
-        (, , , uint128 cap) = engine.assets(asset);
+        (, bool assetEnabled, , uint128 cap) = engine.assets(asset);
+        if (!assetEnabled) { emit Skipped(requestId, "asset disabled"); return; } // audit r4-F2
         if (cap != 0 && spend > cap) spend = cap;       // engine would reject over-cap anyway
         if (spend < buyMinQuote) { emit Skipped(requestId, "budget below min"); return; }
 

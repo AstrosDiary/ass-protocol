@@ -12,7 +12,6 @@ SRC_OF() {
     AssVaultFactory)   echo "src/vault/AssVaultFactory.sol:AssVaultFactory";;
     AssEngine)         echo "src/engine/AssEngine.sol:AssEngine";;
     AssSwapExecutor)   echo "src/adapters/AssSwapExecutor.sol:AssSwapExecutor";;
-    AssDistributor)    echo "src/distributor/AssDistributor.sol:AssDistributor";;
     AssTriggerAdapter) echo "src/adapters/AssTriggerAdapter.sol:AssTriggerAdapter";;
     AssViews)          echo "src/views/AssViews.sol:AssViews";;
     UpgradeableBeacon) echo "lib/openzeppelin-contracts/contracts/proxy/beacon/UpgradeableBeacon.sol:UpgradeableBeacon";;
@@ -47,7 +46,7 @@ for BC in broadcast/DeployBasket.s.sol/56/run-latest.json \
 done
 
 echo "==== proxy-link (BscScan API)"
-for P in "$BASKET" "$ENGINE" "$EXEC" "$DIST" "$ADAPTER"; do
+for P in "$BASKET" "$ENGINE" "$EXEC" "$ADAPTER"; do
   echo -n "link $P : "
   curl -s "https://api.etherscan.io/v2/api?chainid=56&module=contract&action=verifyproxycontract&address=$P&apikey=$ETHERSCAN_API_KEY" \
     -d "" | jq -r '.result // .message'

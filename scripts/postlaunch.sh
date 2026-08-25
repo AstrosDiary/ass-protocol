@@ -44,10 +44,10 @@ if [ "$(cast call "$BASKET" "taxToken()(address)" "${R[@]}")" = "0x0000000000000
   cast send "$BASKET" "setTaxToken(address)" "$TOKEN" --gas-limit 100000 "${SIGN[@]}" >/dev/null
 fi
 cast send "$VAULT" "setEngine(address)" "$ENGINE" --gas-limit 100000 "${SIGN[@]}" >/dev/null
-cast send "$ENGINE" "setDistributor(address)" "$BASKET" --gas-limit 100000 "${SIGN[@]}" >/dev/null
+cast send "$ENGINE" "setDistributor(address)" "$BASKET" --gas-limit 100000 "${SIGN[@]}" >/dev/null   # PUT BACK: buys deliver INTO THE BASKET
 expect "basket.taxToken"    "$TOKEN"  "$(cast call "$BASKET" "taxToken()(address)" "${R[@]}")"
 expect "vault.engine"       "$ENGINE" "$(cast call "$VAULT" "engine()(address)" "${R[@]}")"
-expect "engine.distributor" "$BASKET" "$(cast call "$ENGINE" "distributor()(address)" "${R[@]}")"
+expect "engine.distributor" "$BASKET" "$(cast call "$ENGINE" "distributor()(address)" "${R[@]}")"   # PUT BACK: the read-back guard
 
 # -------- Phase C: adapter arming -------------------------------------------
 say "Phase C — arm the TriggerAdapter"

@@ -6,12 +6,11 @@ import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/Upgradeabl
 import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import {AssEngine} from "../src/engine/AssEngine.sol";
 import {AssSwapExecutor} from "../src/adapters/AssSwapExecutor.sol";
-import {AssDistributor} from "../src/distributor/AssDistributor.sol";
 import {AssTriggerAdapter} from "../src/adapters/AssTriggerAdapter.sol";
 
 /// Deploys the four satellites as beacon-upgradeable proxies (audit item 3):
 /// one impl + one Guardian-owned beacon per contract type, one BeaconProxy each.
-/// The PROXY addresses are the canonical ENGINE/EXEC/DIST/ADAPTER from here on.
+/// The PROXY addresses are the canonical ENGINE/EXEC/ADAPTER from here on.
 /// NOT here (postlaunch.sh territory): adapter.setVault, vault OPERATOR grant,
 /// adapter routes, scheduleCycle.
 contract DeploySatellites is Script {
@@ -24,7 +23,6 @@ contract DeploySatellites is Script {
     struct Deployed {
         address engineP; address engineB;
         address execP;   address execB;
-        address distP;   address distB;
         address adapterP; address adapterB;
     }
 
@@ -38,8 +36,6 @@ contract DeploySatellites is Script {
             address(new AssEngine()), abi.encodeCall(AssEngine.initialize, (QQQB, deployer)));
         (d.execP, d.execB) = _deploy(
             address(new AssSwapExecutor()), abi.encodeCall(AssSwapExecutor.initialize, (QQQB, deployer)));
-        (d.distP, d.distB) = _deploy(
-            address(new AssDistributor()), abi.encodeCall(AssDistributor.initialize, (deployer)));
         (d.adapterP, d.adapterB) = _deploy(
             address(new AssTriggerAdapter()),
             abi.encodeCall(AssTriggerAdapter.initialize, (TRIGGER_SERVICE, d.engineP, WBNB, deployer)));
@@ -47,7 +43,6 @@ contract DeploySatellites is Script {
 
     function _wire(Deployed memory d, address deployer) internal {
         AssEngine engine = AssEngine(d.engineP);
-        AssDistributor dist = AssDistributor(d.distP);
 
         // --- basket (0.5 QQQB per-buy cap per audit feedback) ---
         address[3] memory stocks = [
@@ -58,17 +53,15 @@ contract DeploySatellites is Script {
         uint16[3] memory weights = [uint16(3334), 3333, 3333];
         for (uint256 i; i < 3; ++i) {
             engine.addAsset(stocks[i], weights[i], 0.5 ether);
-            dist.addAsset(stocks[i]);
         }
 
         engine.setExecutor(d.execP);
-        engine.setDistributor(d.distP);
+        engine.setDistributor(vm.envAddress("BASKET")); // buys deliver into the IB-ASS basket
         engine.setKeeper(deployer, true);        // manual-keeper fallback mandate
         engine.setKeeper(d.adapterP, true);      // automation
         engine.setGasFund(d.adapterP, 100);      // 1% skim -> adapter gas tank
         AssSwapExecutor(d.execP).setEngine(d.engineP);
         AssSwapExecutor(d.execP).setRouter(SMART_ROUTER, true);
-        dist.setKeeper(deployer, true);
         AssTriggerAdapter(payable(d.adapterP)).setSwapRouter(SMART_ROUTER);
     }
 
@@ -86,8 +79,6 @@ contract DeploySatellites is Script {
         console2.log("engine  beacon:", d.engineB);
         console2.log("exec    proxy:", d.execP);
         console2.log("exec    beacon:", d.execB);
-        console2.log("dist    proxy:", d.distP);
-        console2.log("dist    beacon:", d.distB);
         console2.log("adapter proxy:", d.adapterP);
         console2.log("adapter beacon:", d.adapterB);
         console2.log("");

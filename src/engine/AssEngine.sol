@@ -86,7 +86,7 @@ contract AssEngine is Initializable, OwnableUpgradeable, ReentrancyGuard {
     }
 
     modifier onlyKeeper() {
-        if (!keeper[msg.sender] && msg.sender != owner()) revert NotKeeper();
+        if (!keeper[msg.sender] && msg.sender != owner() && msg.sender != _getGuardian())  revert NotKeeper();
         _;
     }
 
