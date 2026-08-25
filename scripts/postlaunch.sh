@@ -13,7 +13,7 @@ cd "$(dirname "$0")/.."
 set -a; source .env; set +a
 
 TX="${1:?usage: ./postlaunch.sh <launch tx hash>}"
-SIGN=(--rpc-url "$LOGS_RPC" --account ass-launcher --password-file "$HOME/.ass_pw")
+SIGN=(--rpc-url "$LOGS_RPC" --account ass-launcher2 --password-file "$HOME/.ass_launcher2_pw")
 R=(--rpc-url "$BSC_RPC_URL")
 
 say()  { printf '\n\033[1;35m== %s\033[0m\n' "$*"; }
@@ -37,6 +37,10 @@ say "Phase A.1 — THE resolver proof (portal wired the basket at birth)"
 expect "DIV.dividendToken" "$BASKET" "$(cast call "$DIV" "dividendToken()(address)" "${R[@]}")"
 expect "vault.taxToken"    "$TOKEN"  "$(cast call "$VAULT" "taxToken()(address)" "${R[@]}")"
 expect "vault.quote"       "$QQQB"   "$(cast call "$VAULT" "vaultQuoteToken()(address)" "${R[@]}")"
+# signer must hold vault DEFAULT_ADMIN (i.e. the Launch click came from $DEPLOYER)
+# — aborts BEFORE any send if the wrong wallet launched (audit r5 pre-flight)
+expect "vault admin (deployer)" "true" \
+  "$(cast call "$VAULT" "hasRole(bytes32,address)(bool)" 0x0000000000000000000000000000000000000000000000000000000000000000 "$DEPLOYER" "${R[@]}")"
 
 # -------- Phase B: wiring trio ----------------------------------------------
 say "Phase B — wiring: basket.taxToken, vault.engine, engine.distributor"

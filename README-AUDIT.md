@@ -1,4 +1,4 @@
-# $ASS Protocol — Flap Vault Audit Package (v6 — all 16 findings closed)
+# $ASS Protocol — v8 — all findings closed; launch stack)
 
 **Asian Stock Strategy ($ASS)** — a Flap Tax Token V3 (QQQB-quoted) whose custom
 vault pipeline converts trading-tax revenue into a basket of Binance bStocks
@@ -59,16 +59,22 @@ every live claim across three staging generations delivered in full).
 
 | Contract | Proxy | Beacon (owner: Flap Guardian) |
 |---|---|---|
-| AssBasket (IB-ASS) | `0xA37e75827B46B80BF8B0e88883Dd395e1A5bDDFc` | `0x9E0E5Fa9106238286568f4c7371DDd55Df9bEeA3` |
-| AssEngine | `0x3840c466B78b992E8C48F8563517560A59d0c2D1` | `0xd434542b1261B3E705EB0836276013e3A113be54` |
-| AssSwapExecutor | `0x78f2C983396FE77e7608f26807eB7F4883B442F1` | `0x666539343F4C57cE6aBa5bA1351B3487682D7EB9` |
-| AssTriggerAdapter | `0xe07F20402d910A9792FDeab471B92c3A6745d200` | `0xc6df7A145A1f3339896e632cBCD50269906c5465` |
-| AssVault implementation | `0x941f92C9b83557c2276D5dc554Fd6e7B67441FA0` | beacon `0x0237E8c3A26f6B7a6C05B6C34D43e19A380227d3` |
-| AssVaultFactory (v2.3, computed dividend) | `0x52EB388BD4ee370dc510e1E21057d91056990620` | — |
+| AssBasket (IB-ASS) | `0xDA191E934A95fbf2D6bA883B4262a0708157128e` | `0x8D61Fd61F1a504dab7Bab60E3E7b3575731D567e` |
+| AssEngine | `0x231cdEa65ee0B95059B4EcC29e858315E89ECc60` | `0xCF861aa7E299056ce544203A704a1C8EE28Ec19b` |
+| AssSwapExecutor | `0x74106c547d26364553927077b5997efeb907Ec9D` | `0x0d699fd50d5329552Fe645606CF89Cd355269EE0` |
+| AssTriggerAdapter | `0x1e4F56EC1521E47A0B16d24EaA2747B2F69b4CEf` | `0x9696c875b1C1E6C2E98adf46825Efce5A3D50479` |
+| AssVault implementation | `0x71D11cABeaCF912e475588F714A46712d6D2BB22` | beacon `0xB3E3cBA56A8bC2aabdBc7e19C8DfB720C38A50d7` |
+| AssVaultFactory (v2.3, computed dividend) | `0x8629D200ac335dab205312f87a0c3d2254414433` | — |
 
 All five beacons are Guardian-owned from construction. `engine.distributor()`
 returns the AssBasket at rest (battery-verified). Nothing has launched through
 this factory; the real $ASS launch will be its first and only token.
+
+**v8:** identical v7 source (zero code delta — standard-JSON input unchanged)
+redeployed in full from a fresh launch-operations deployer EOA
+(`0xfF274879d79CB1f86FFC4176A0BC880CA16E5c71`). Addresses above are current;
+battery-verified at rest including `engine.distributor()` → basket. Factory
+constructor args: (vaultBeacon `0xB3E3...50d7`, basket `0xDA19...128e`).
 
 ## Revenue flow (all on-chain, no keeper in the money path)
 
