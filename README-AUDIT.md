@@ -1,4 +1,4 @@
-# $ASS Protocol — Flap Vault Audit Package (v4 — all challenge-review actions implemented)
+# $ASS Protocol — Flap Vault Audit Package (v6 — all 16 findings closed)
 
 **Asian Stock Strategy ($ASS)** — a Flap Tax Token V3 (QQQB-quoted) whose custom
 vault pipeline converts trading-tax revenue into a basket of Binance bStocks
@@ -30,7 +30,18 @@ on demand.
 Also in v4: adapter fund sweeps are now **pause-gated in code** (revert
 `NotPaused` unless the adapter is paused — decommission-only, matching the
 documented trust model), and `previewMint` mirrors `processReceived`'s
-post-drain recovery branch line-for-line.
+post-drain recovery branch in the source tree (the deployed basket instance
+carries the v3 view — no redeploy warranted, as `previewMint` has no on-chain
+or frontend consumer and the divergence is view-only in the transient
+post-drain state, per the round-3 disposition).
+
+**v6 (round-6 #15):** zero-spend-cap assets now skip soft in both the BUY
+spawn loop (before any Trigger Service fee is paid) and `_runBuy` — the same
+pattern as the disabled-asset guard — and the adapter's cap semantics now
+match the engine's exactly (`maxSpendPerBuy == 0` means never buy, on both
+sides). Satellites (engine / executor / adapter) redeployed with this guard;
+addresses below are current and battery-verified at rest, including
+`engine.distributor()` → basket.
 
 **Claims are atomic by design (final disposition of round-1 F5):** a claim
 either delivers all basket components or reverts whole with the entitlement
@@ -47,9 +58,9 @@ every live claim across three staging generations delivered in full).
 | Contract | Proxy | Beacon (owner: Flap Guardian) |
 |---|---|---|
 | AssBasket (IB-ASS) | `0xA37e75827B46B80BF8B0e88883Dd395e1A5bDDFc` | `0x9E0E5Fa9106238286568f4c7371DDd55Df9bEeA3` |
-| AssEngine | `0x5940250Ce31F8A72691f3E9228ba64DFB32D155E` | `0x46E2F3476dd7e59314f206247506A60eBb4C6f7e` |
-| AssSwapExecutor | `0x578C2c97D0a42851C7F38fD5Cb9d7C9318Baa47b` | `0xF1C836A83c0E9EF136ECaa0EC5F58727fE6B6510` |
-| AssTriggerAdapter | `0xB860c8F3Cf6184f1813aD60cBd6F8c63d3cD0782` | `0x181097dA1CB9e18De0bF4f3a0fA4fE2E0a571706` |
+| AssEngine | `0xb7FCD7f4418BB3285B51bCFEB6e784884667c297` | `0x1B4d28d2fe431B5C69c48B3CCc065b3042676BF9` |
+| AssSwapExecutor | `0x45477488270CEB3599aeE10926d3E05B52b1Fc3e` | `0xD1151aC6C094995564Db40dcc3E6F0C34D709D52` |
+| AssTriggerAdapter | `0x2A93588631623E5982834ECFb4770019a12AF5D9` | `0x8f8658F92605285aec03f095571195aE73E7186F` |
 | AssVault implementation | `0x941f92C9b83557c2276D5dc554Fd6e7B67441FA0` | beacon `0x0237E8c3A26f6B7a6C05B6C34D43e19A380227d3` |
 | AssVaultFactory (v2.3, computed dividend) | `0x52EB388BD4ee370dc510e1E21057d91056990620` | — |
 
@@ -115,8 +126,9 @@ rehearsal and fixed with regression tests before this lineage's final form:
 (a) claims pay strictly from the processed pool (an early claimer could
 previously sweep not-yet-minted deposits); (b) share pricing recovers at
 parity after a full pool drain (previously could deadlock minting against
-residual supply). The v4 stack carries both fixes plus all five
-challenge-review actions; happy to share tx-level exhibits.
+residual supply). The v6 stack carries both fixes plus all five
+challenge-review actions and the round-6 zero-cap guard; happy to share
+tx-level exhibits.
 
 ## Build
 

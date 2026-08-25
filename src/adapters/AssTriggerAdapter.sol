@@ -225,12 +225,13 @@ contract AssTriggerAdapter is Initializable, OwnableUpgradeable, ReentrancyGuard
         if (engine.unallocatedQuote() >= engine.minProcessAmount()) {
             try engine.processRevenue() {} catch { emit Skipped(requestId, "process failed"); }
         }
-        // spawn one BUY trigger per fundable, routed, ENABLED asset
+        // spawn one BUY trigger per fundable, routed, ENABLED, capped asset
         uint256 n = engine.assetsCount();
         for (uint256 i; i < n && i < 8; ++i) {
             address a = engine.allAssets(i);
-            (, bool assetEnabled,,) = engine.assets(a);
+            (, bool assetEnabled, , uint128 capA) = engine.assets(a);
             if (!assetEnabled) continue; // never pay a trigger fee for a disabled asset (audit r4-F2)
+            if (capA == 0) continue;     // nor for a zero-cap asset — engine treats 0 as cap-of-zero (audit r6-F15)
             if (engine.budget(a) < buyMinQuote) continue;
             if (_routes[a].pools.length == 0) continue;
             uint256 fee = triggerService.getFee();
@@ -262,7 +263,8 @@ contract AssTriggerAdapter is Initializable, OwnableUpgradeable, ReentrancyGuard
         uint256 spend = engine.budget(asset);           // re-validate LIVE (delay-aware)
         (, bool assetEnabled, , uint128 cap) = engine.assets(asset);
         if (!assetEnabled) { emit Skipped(requestId, "asset disabled"); return; } // audit r4-F2
-        if (cap != 0 && spend > cap) spend = cap;       // engine would reject over-cap anyway
+        if (cap == 0) { emit Skipped(requestId, "zero spend cap"); return; }      // audit r6-F15: engine treats 0 as cap-of-zero
+        if (spend > cap) spend = cap;                   // engine would reject over-cap anyway
         if (spend < buyMinQuote) { emit Skipped(requestId, "budget below min"); return; }
 
         uint256 minOut;

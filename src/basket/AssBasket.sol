@@ -171,7 +171,9 @@ contract AssBasket is Initializable, OwnableUpgradeable, ERC20Upgradeable, Reent
             shares = depositValue > MINIMUM_LIQUIDITY ? depositValue - MINIMUM_LIQUIDITY : 0;
         } else {
             uint256 navBefore = totalNavUsd() - _unprocessedValueUsd(); // exclude the deposit itself
-            shares = navBefore == 0 ? 0 : Math.mulDiv(depositValue, supplyBefore, navBefore);
+            // post-drain recovery mirror: navBefore == 0 with residual supply
+            // re-seeds at parity, matching processReceived line-for-line
+            shares = navBefore == 0 ? depositValue : Math.mulDiv(depositValue, supplyBefore, navBefore);
         }
     }
 
