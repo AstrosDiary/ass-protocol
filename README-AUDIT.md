@@ -59,12 +59,12 @@ every live claim across three staging generations delivered in full).
 
 | Contract | Proxy | Beacon (owner: Flap Guardian) |
 |---|---|---|
-| AssBasket (IB-ASS) | `0xDA191E934A95fbf2D6bA883B4262a0708157128e` | `0x8D61Fd61F1a504dab7Bab60E3E7b3575731D567e` |
-| AssEngine | `0x231cdEa65ee0B95059B4EcC29e858315E89ECc60` | `0xCF861aa7E299056ce544203A704a1C8EE28Ec19b` |
-| AssSwapExecutor | `0x74106c547d26364553927077b5997efeb907Ec9D` | `0x0d699fd50d5329552Fe645606CF89Cd355269EE0` |
-| AssTriggerAdapter | `0x1e4F56EC1521E47A0B16d24EaA2747B2F69b4CEf` | `0x9696c875b1C1E6C2E98adf46825Efce5A3D50479` |
-| AssVault implementation | `0x71D11cABeaCF912e475588F714A46712d6D2BB22` | beacon `0xB3E3cBA56A8bC2aabdBc7e19C8DfB720C38A50d7` |
-| AssVaultFactory (v2.3, computed dividend) | `0x8629D200ac335dab205312f87a0c3d2254414433` | — |
+| AssBasket (IB-ASS) | `0x6F5ec32738425A95ef14CE195d0860f36CE35985` | `0xD0B140d75AB3C914e82440064E8170fF197aA72f` |
+| AssEngine | `0xA58Ac75117f39dd911496f55aeD04748ca51a1C4` | `0x8733F76Db6A8d39D7a681f5FE074863b8c7805cC` |
+| AssSwapExecutor | `0xc1695cDB9f544845355c96E179B95A198a561E31` | `0xADEfb9e53a468Cd1Fb72e95fd845092Bf6b23F2f` |
+| AssTriggerAdapter | `0x9B430ec599ca16dE2d9596b42ae34A683E48575f` | `0xB2627f02B96AaCe75e97149E56fcB110c1C20d31` |
+| AssVault implementation | `0xE7bB89c6590B52fA87bA2eb899813cF5A328D6B6` | beacon `0x6FA21108C86Db77Da8018E7e74F71C3153227C9d` |
+| AssVaultFactory (v2.3, computed dividend) | `0x5f80d78Eb439F473cdde43b5F08c35AB383F6F07` | — |
 
 All five beacons are Guardian-owned from construction. `engine.distributor()`
 returns the AssBasket at rest (battery-verified). Nothing has launched through
@@ -75,6 +75,12 @@ redeployed in full from a fresh launch-operations deployer EOA
 (`0xfF274879d79CB1f86FFC4176A0BC880CA16E5c71`). Addresses above are current;
 battery-verified at rest including `engine.distributor()` → basket. Factory
 constructor args: (vaultBeacon `0xB3E3...50d7`, basket `0xDA19...128e`).
+
+**v9:** identical source (zero code delta — the standard-JSON input remains
+exact) redeployed in full from the final launch deployer EOA
+(`0xe8EE1133217D83eaCd9BaA1cBd0fa95B8051ec7e`). Addresses above are current;
+battery-verified at rest including `engine.distributor()` → basket. Factory
+constructor args: (vaultBeacon `0x6FA2...7C9d`, basket `0x6F5e...5985`).
 
 ## Revenue flow (all on-chain, no keeper in the money path)
 

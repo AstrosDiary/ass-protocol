@@ -13,7 +13,7 @@ cd "$(dirname "$0")/.."
 set -a; source .env; set +a
 
 TX="${1:?usage: ./postlaunch.sh <launch tx hash>}"
-SIGN=(--rpc-url "$LOGS_RPC" --account ass-launcher2 --password-file "$HOME/.ass_launcher2_pw")
+SIGN=(--rpc-url "$LOGS_RPC" --account ass-launcher3 --password-file "$HOME/.ass_launcher3_pw")
 R=(--rpc-url "$BSC_RPC_URL")
 
 say()  { printf '\n\033[1;35m== %s\033[0m\n' "$*"; }
