@@ -7,9 +7,9 @@ contract MockWBNB is ERC20 {
     constructor() ERC20("Wrapped BNB", "WBNB") {}
     function deposit() external payable { _mint(msg.sender, msg.value); }
     function withdraw(uint256 amt) external {
-        _burn(msg.sender, amt);
-        (bool ok,) = msg.sender.call{value: amt}("");
-        require(ok, "send fail");
+        _burn(msg.sender, amt);                                 // reverts on insufficient balance
+        (bool ok, ) = msg.sender.call{value: amt, gas: 2300}(""); // real WBNB: transfer()'s 2300 stipend
+        require(ok, "wbnb send");
     }
     receive() external payable {}
 }

@@ -315,7 +315,15 @@ contract AssTriggerAdapter is Initializable, OwnableUpgradeable, ReentrancyGuard
         if (!ok) return;
 
         uint256 w = IWBNBMinimal(wbnb).balanceOf(address(this));
-        if (w > 0) { IWBNBMinimal(wbnb).withdraw(w); emit GasToppedUp(bal, w); }
+        if (w > 0) {
+            // soft-fail (audit r7): in the live path the proxy is EIP-2929-warm
+            // (trigger() entered through it) and WBNB's 2300-gas transfer()
+            // stipend suffices — proven on-chain in staging. The guard makes
+            // that independence explicit: a failed unwrap leaves WBNB held for
+            // the next cycle instead of failing the callback.
+            try IWBNBMinimal(wbnb).withdraw(w) { emit GasToppedUp(bal, w); }
+            catch {}
+        }
     }
 
     function gasTwapQuoteExt(uint256 amountIn) external view returns (uint256) {

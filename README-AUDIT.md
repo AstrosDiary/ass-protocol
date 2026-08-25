@@ -43,6 +43,8 @@ sides). Satellites (engine / executor / adapter) redeployed with this guard;
 addresses below are current and battery-verified at rest, including
 `engine.distributor()` → basket.
 
+**v7 (round-7 WBNB finding):** the WBNB unwrap in _topUpGas is now try/catch soft-fail (a failed unwrap holds WBNB for the next cycle instead of failing the callback), and MockWBNB forwards real WBNB's 2,300-gas transfer stipend so this class is caught locally. Live-path analysis: the unwrap only executes inside trigger(), which enters through the proxy, so the beacon slot and implementation are EIP-2929-warm when the stipend fires — verified by a live on-chain GasToppedUp from staging (tx in reply).
+
 **Claims are atomic by design (final disposition of round-1 F5):** a claim
 either delivers all basket components or reverts whole with the entitlement
 intact and retriable — confirmed in the challenge review for the self-serve
@@ -58,9 +60,9 @@ every live claim across three staging generations delivered in full).
 | Contract | Proxy | Beacon (owner: Flap Guardian) |
 |---|---|---|
 | AssBasket (IB-ASS) | `0xA37e75827B46B80BF8B0e88883Dd395e1A5bDDFc` | `0x9E0E5Fa9106238286568f4c7371DDd55Df9bEeA3` |
-| AssEngine | `0xb7FCD7f4418BB3285B51bCFEB6e784884667c297` | `0x1B4d28d2fe431B5C69c48B3CCc065b3042676BF9` |
-| AssSwapExecutor | `0x45477488270CEB3599aeE10926d3E05B52b1Fc3e` | `0xD1151aC6C094995564Db40dcc3E6F0C34D709D52` |
-| AssTriggerAdapter | `0x2A93588631623E5982834ECFb4770019a12AF5D9` | `0x8f8658F92605285aec03f095571195aE73E7186F` |
+| AssEngine | `0x3840c466B78b992E8C48F8563517560A59d0c2D1` | `0xd434542b1261B3E705EB0836276013e3A113be54` |
+| AssSwapExecutor | `0x78f2C983396FE77e7608f26807eB7F4883B442F1` | `0x666539343F4C57cE6aBa5bA1351B3487682D7EB9` |
+| AssTriggerAdapter | `0xe07F20402d910A9792FDeab471B92c3A6745d200` | `0xc6df7A145A1f3339896e632cBCD50269906c5465` |
 | AssVault implementation | `0x941f92C9b83557c2276D5dc554Fd6e7B67441FA0` | beacon `0x0237E8c3A26f6B7a6C05B6C34D43e19A380227d3` |
 | AssVaultFactory (v2.3, computed dividend) | `0x52EB388BD4ee370dc510e1E21057d91056990620` | — |
 
